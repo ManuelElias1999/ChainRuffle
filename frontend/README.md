@@ -1,7 +1,7 @@
 
-  # Bilingual Blockchain Lottery App
+  # Design ChainRaffle Web App
 
-  This is a code bundle for Bilingual Blockchain Lottery App. The original project is available at https://www.figma.com/design/ur44I6o7U8V4QFKe1dQdcA/Bilingual-Blockchain-Lottery-App.
+  This is a code bundle for Design ChainRaffle Web App. The original project is available at https://www.figma.com/design/quEwAx9WnGhbivRuU9WdGc/Design-ChainRaffle-Web-App.
 
   ## Running the code
 

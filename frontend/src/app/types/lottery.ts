@@ -1,36 +1,26 @@
+export type Blockchain = 'Base' | 'Avalanche' | 'Arbitrum';
+
+export type LotteryStatus = 'open' | 'closed';
+
 export interface Lottery {
   id: string;
   name: string;
+  blockchain: Blockchain;
   creator: string;
   ticketPrice: number;
   maxTickets: number;
   ticketsSold: number;
-  currentPool: number;
-  maxPool: number;
-  status: 'open' | 'closed';
-  createdAt: Date;
+  status: LotteryStatus;
   winner?: string;
-  participants: Participant[];
+  participants: {
+    address: string;
+    tickets: number;
+  }[];
 }
 
-export interface Participant {
-  wallet: string;
-  ticketCount: number;
-}
-
-export interface LotteryFilters {
-  search: string;
-  currentPoolMin: string;
-  currentPoolMax: string;
-  maxPoolMin: string;
-  maxPoolMax: string;
-  ticketPriceMin: string;
-  ticketPriceMax: string;
-  ticketsSoldMin: string;
-  ticketsSoldMax: string;
-  totalTicketsMin: string;
-  totalTicketsMax: string;
-  remainingTicketsMin: string;
-  remainingTicketsMax: string;
-  sortBy: 'highestPool' | 'highestMaxPool' | 'lowestPrice' | 'highestPrice' | 'newest' | 'closestToFull';
+export interface Stats {
+  openLotteries: number;
+  totalPoolUSDC: number;
+  highestPool: number;
+  totalParticipants: number;
 }

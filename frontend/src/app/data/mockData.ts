@@ -1,0 +1,100 @@
+import { Lottery, Stats } from '../types/lottery';
+
+export const mockLotteries: Lottery[] = [
+  {
+    id: 'LOT-001',
+    name: 'Super Sorteo Base',
+    blockchain: 'Base',
+    creator: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+    ticketPrice: 10,
+    maxTickets: 100,
+    ticketsSold: 67,
+    status: 'open',
+    participants: [
+      { address: '0x1234...5678', tickets: 15 },
+      { address: '0xabcd...ef01', tickets: 22 },
+      { address: '0x9876...4321', tickets: 30 },
+    ],
+  },
+  {
+    id: 'LOT-002',
+    name: 'Avalanche Mega Prize',
+    blockchain: 'Avalanche',
+    creator: '0xAbC123dEf456789012345678901234567890aBcD',
+    ticketPrice: 5,
+    maxTickets: 200,
+    ticketsSold: 145,
+    status: 'open',
+    participants: [
+      { address: '0x2345...6789', tickets: 45 },
+      { address: '0xbcde...f012', tickets: 50 },
+      { address: '0x8765...3210', tickets: 50 },
+    ],
+  },
+  {
+    id: 'LOT-003',
+    name: 'Arbitrum Jackpot',
+    blockchain: 'Arbitrum',
+    creator: '0xDef789012345678901234567890AbCdEf12345',
+    ticketPrice: 25,
+    maxTickets: 50,
+    ticketsSold: 38,
+    status: 'open',
+    participants: [
+      { address: '0x3456...7890', tickets: 20 },
+      { address: '0xcdef...0123', tickets: 18 },
+    ],
+  },
+  {
+    id: 'LOT-004',
+    name: 'Base Quick Draw',
+    blockchain: 'Base',
+    creator: '0x123456789012345678901234567890AbCdEf123',
+    ticketPrice: 2,
+    maxTickets: 500,
+    ticketsSold: 412,
+    status: 'open',
+    participants: [
+      { address: '0x4567...8901', tickets: 100 },
+      { address: '0xdef0...1234', tickets: 150 },
+      { address: '0x7654...2109', tickets: 162 },
+    ],
+  },
+  {
+    id: 'LOT-005',
+    name: 'Avalanche Elite',
+    blockchain: 'Avalanche',
+    creator: '0x9012345678901234567890AbCdEf123456789',
+    ticketPrice: 50,
+    maxTickets: 20,
+    ticketsSold: 18,
+    status: 'open',
+    participants: [
+      { address: '0x5678...9012', tickets: 8 },
+      { address: '0xef01...2345', tickets: 10 },
+    ],
+  },
+  {
+    id: 'LOT-006',
+    name: 'Sorteo Cerrado',
+    blockchain: 'Base',
+    creator: '0xCdEf123456789012345678901234567890AbC',
+    ticketPrice: 15,
+    maxTickets: 100,
+    ticketsSold: 100,
+    status: 'closed',
+    winner: '0x6789...0123',
+    participants: [
+      { address: '0x6789...0123', tickets: 45 },
+      { address: '0xf012...3456', tickets: 35 },
+      { address: '0x6543...1098', tickets: 20 },
+    ],
+  },
+];
+
+export const mockStats: Stats = {
+  openLotteries: 5,
+  totalPoolUSDC: 3450,
+  highestPool: 950,
+  totalParticipants: 127,
+};
