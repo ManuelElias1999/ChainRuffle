@@ -50,7 +50,7 @@ export const CHAIN_CONFIG: Record<SupportedChainKey, ChainConfig> = {
     explorerName: 'Arbiscan',
     explorerUrl: 'https://sepolia.arbiscan.io',
     color: '#4ade80',
-    rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc',
+    rpcUrl: 'https://arbitrum-sepolia-rpc.publicnode.com',
   },
 };
 

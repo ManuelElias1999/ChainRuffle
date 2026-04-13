@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { getRaffleContract } from '../lib/contracts';
 import { mapLotteryFromContract } from '../lib/lotteryMappers';
 import type { Lottery } from '../types/lottery';
@@ -10,7 +10,7 @@ export function useChainLotteries(chainKey: SupportedChainKey) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
-  const loadLotteries = async () => {
+  const loadLotteries = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
@@ -23,7 +23,6 @@ export function useChainLotteries(chainKey: SupportedChainKey) {
         abi: contract.abi,
         functionName: 'totalLotteries',
       });
-      console.log(`[${chainKey}] totalLotteries:`, total.toString());
 
       const totalNumber = Number(total);
 
@@ -45,29 +44,45 @@ export function useChainLotteries(chainKey: SupportedChainKey) {
         )
       );
 
-      const mapped: Lottery[] = [];
+      setLotteries((prev) => {
+        const prevMap = new Map<string, Lottery>(
+          prev.map((lottery) => [lottery.id.toString(), lottery])
+        );
 
-      for (const result of results) {
-        if (result.status === 'fulfilled') {
-          mapped.push(mapLotteryFromContract(result.value as any, chainKey));
-        } else {
-          console.warn(`[${chainKey}] No se pudo leer una lotería`, result.reason);
-        }
-      }
+        const nextMap = new Map<string, Lottery>();
 
-      setLotteries(mapped);
+        ids.forEach((id, index) => {
+          const result = results[index];
+          const idKey = id.toString();
+
+          if (result.status === 'fulfilled') {
+            const mapped = mapLotteryFromContract(result.value as any, chainKey);
+            nextMap.set(idKey, mapped);
+          } else {
+            console.warn(`[${chainKey}] No se pudo leer la lotería ${idKey}`, result.reason);
+
+            const previousLottery = prevMap.get(idKey);
+            if (previousLottery) {
+              nextMap.set(idKey, previousLottery);
+            }
+          }
+        });
+
+        const merged = Array.from(nextMap.values()).sort((a, b) => Number(b.id - a.id));
+        return merged;
+      });
     } catch (err) {
       console.error(`[${chainKey}] Error cargando loterías`, err);
       setError(err);
-      setLotteries([]);
+      // mantener últimos datos buenos
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [chainKey]);
 
   useEffect(() => {
     loadLotteries();
-  }, [chainKey]);
+  }, [loadLotteries]);
 
   return {
     lotteries,

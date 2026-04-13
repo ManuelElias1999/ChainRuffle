@@ -9,6 +9,8 @@ interface Translations {
   };
 }
 
+type TranslationVars = Record<string, string | number>;
+
 const translations: Translations = {
   // Header
   'header.search': { es: 'Buscar loterías...', en: 'Search lotteries...' },
@@ -47,12 +49,8 @@ const translations: Translations = {
   'home.stats.pool': { es: 'USDC en pozos abiertos', en: 'USDC in open pools' },
   'home.stats.highest': { es: 'Pozo más alto', en: 'Highest pool' },
   'home.stats.participants': { es: 'Participantes totales', en: 'Total participants' },
-  'home.trust.multichain': { es: 'Multichain', en: 'Multichain' },
-  'home.trust.usdc': { es: 'Pagos en USDC', en: 'USDC Payments' },
-  'home.trust.transparent': { es: 'Pagos transparentes', en: 'Transparent payouts' },
-  'home.trust.onchain': { es: 'Onchain', en: 'Onchain' },
 
-  // Lottery Cards
+  // Lottery
   'lottery.id': { es: 'ID', en: 'ID' },
   'lottery.creator': { es: 'Creador', en: 'Creator' },
   'lottery.price': { es: 'Precio por ticket', en: 'Ticket price' },
@@ -76,7 +74,7 @@ const translations: Translations = {
   'filters.newest': { es: 'Más recientes', en: 'Newest' },
   'filters.closestFull': { es: 'Más cerca de llenarse', en: 'Closest to full' },
 
-  // Detail
+  // Detail existing
   'detail.purchase': { es: 'Comprar tickets', en: 'Buy tickets' },
   'detail.quantity': { es: 'Cantidad', en: 'Quantity' },
   'detail.total': { es: 'Total estimado', en: 'Estimated total' },
@@ -98,6 +96,64 @@ const translations: Translations = {
   'detail.qr.step1': { es: 'Aprobar USDC', en: 'Approve USDC' },
   'detail.qr.step2': { es: 'Escanear y comprar', en: 'Scan and buy' },
   'detail.noWinner': { es: 'Lotería cerrada sin ventas', en: 'Lottery closed with no sales' },
+  'detail.share_lottery_text': { es: 'Mira esta lotería', en: 'Check out this lottery' },
+  'detail.link_copied': { es: 'Link copiado', en: 'Link copied' },
+  'detail.copy_this_link': { es: 'Copia este link', en: 'Copy this link' },
+
+  // Detail added
+  'detail.loading': { es: 'Cargando lotería...', en: 'Loading lottery...' },
+  'detail.load_error': { es: 'No se pudo cargar la lotería', en: 'Could not load lottery' },
+  'detail.back_to_explorer': { es: 'Volver al explorador', en: 'Back to explorer' },
+  'detail.creator': { es: 'Creador', en: 'Creator' },
+  'detail.progress': { es: 'Progreso', en: 'Progress' },
+  'detail.result': { es: 'Resultado', en: 'Result' },
+  'detail.winning_ticket': { es: 'Ticket ganador', en: 'Winning ticket' },
+  'detail.winner_prize': { es: 'Premio del ganador', en: 'Winner prize' },
+  'detail.creator_earnings': { es: 'Ganancia del creador', en: 'Creator earnings' },
+  'detail.fees_distributed': { es: 'Fees distribuidos', en: 'Distributed fees' },
+  'detail.closed_without_winner': { es: 'Cerrada sin ganador', en: 'Closed without winner' },
+  'detail.closed_without_winner_explain': { es: 'Esta lotería cerró sin ganador. No hubo tickets válidos para el sorteo final.', en: 'This lottery closed without a winner. There were no valid tickets for the final draw.' },
+  'detail.status_finished_with_winner': { es: 'Finalizada con ganador', en: 'Finished with winner' },
+  'detail.status_finished_without_winner': { es: 'Finalizada sin ganador', en: 'Finished without winner' },
+  'detail.connect_wallet_to_buy': { es: 'Conecta tu wallet para comprar tickets', en: 'Connect your wallet to buy tickets' },
+  'detail.purchase_flow': { es: 'Flujo de compra', en: 'Purchase flow' },
+  'detail.purchase_flow_explain_approve_then_buy': { es: 'Con un solo click iniciaremos approve y luego la compra automáticamente.', en: 'With one click we will start approval and then automatically continue with the purchase.' },
+  'detail.purchase_flow_explain_direct_buy': { es: 'Ya tienes aprobación suficiente. Iremos directo a la compra.', en: 'You already have enough approval. We will go directly to the purchase.' },
+  'detail.purchase_approve_wallet': { es: 'Paso 1/2: Confirma la aprobación de USDC en tu wallet.', en: 'Step 1/2: Confirm USDC approval in your wallet.' },
+  'detail.purchase_verifying_allowance': { es: 'USDC aprobado correctamente. Verificando allowance...', en: 'USDC approved successfully. Verifying allowance...' },
+  'detail.purchase_preparing': { es: 'USDC aprobado correctamente. Preparando compra...', en: 'USDC approved successfully. Preparing purchase...' },
+  'detail.purchase_confirm_buy_wallet': { es: 'Paso 2/2: Confirma la compra de tickets en tu wallet.', en: 'Step 2/2: Confirm ticket purchase in your wallet.' },
+  'detail.purchase_allowance_not_ready': { es: 'El approve salió bien, pero el allowance aún no se reflejó. Intenta de nuevo en unos segundos.', en: 'The approval succeeded, but the allowance is not reflected yet. Please try again in a few seconds.' },
+  'detail.purchase_error': { es: 'La compra no se completó. Revisa si cancelaste una firma, si tienes balance suficiente o si la red respondió lento.', en: 'The purchase could not be completed. Check whether you canceled a signature, if you have enough balance, or if the network responded slowly.' },
+  'detail.purchase_success': { es: 'Ya compraste {{count}} ticket(s).', en: 'You bought {{count}} ticket(s).' },
+  'detail.purchase_success_closed': { es: 'Ya compraste {{count}} ticket(s). La lotería se cerró automáticamente.', en: 'You bought {{count}} ticket(s). The lottery closed automatically.' },
+  'detail.transaction_incomplete': { es: 'La transacción no se completó. Revisa la wallet, allowance o balance.', en: 'The transaction was not completed. Check your wallet, allowance, or balance.' },
+  'detail.wrong_network': { es: 'Red incorrecta', en: 'Wrong network' },
+  'detail.view_any_chain_interact_same_chain': { es: 'Puedes ver esta lotería desde cualquier red, pero para comprar o cerrar debes cambiar a {{chain}}.', en: 'You can view this lottery from any network, but to buy or close it you must switch to {{chain}}.' },
+  'detail.switching_network': { es: 'Cambiando red...', en: 'Switching network...' },
+  'detail.switch_to_chain': { es: 'Cambiar a {{chain}}', en: 'Switch to {{chain}}' },
+  'detail.buy_tickets': { es: 'Comprar tickets', en: 'Buy tickets' },
+  'detail.buy_again': { es: 'Comprar de nuevo', en: 'Buy again' },
+  'detail.try_again': { es: 'Intentar de nuevo', en: 'Try again' },
+  'detail.button_approving': { es: 'Paso 1/2: Aprobando USDC...', en: 'Step 1/2: Approving USDC...' },
+  'detail.button_preparing': { es: 'Preparando compra...', en: 'Preparing purchase...' },
+  'detail.button_buying': { es: 'Paso 2/2: Comprando tickets...', en: 'Step 2/2: Buying tickets...' },
+  'detail.button_closing': { es: 'Cerrando lotería...', en: 'Closing lottery...' },
+  'detail.max': { es: 'Max', en: 'Max' },
+  'detail.previous': { es: 'Anterior', en: 'Previous' },
+  'detail.next': { es: 'Siguiente', en: 'Next' },
+  'detail.page_of': { es: 'Página {{current}} de {{total}}', en: 'Page {{current}} of {{total}}' },
+  'detail.participants_range': { es: 'Mostrando {{start}}-{{end}} de {{total}}', en: 'Showing {{start}}-{{end}} of {{total}}' },
+  'detail.no_participants': { es: 'Todavía no hay participantes.', en: 'There are no participants yet.' },
+  'detail.view_creation_explorer': { es: 'Ver creación en explorer', en: 'View creation in explorer' },
+  'detail.view_purchase_explorer': { es: 'Ver compra en explorer', en: 'View purchase in explorer' },
+  'detail.view_close_explorer': { es: 'Ver cierre en explorer', en: 'View closure in explorer' },
+  'detail.close_confirm_wallet': { es: 'Confirma el cierre de la lotería en tu wallet.', en: 'Confirm lottery closure in your wallet.' },
+  'detail.close_updating': { es: 'Cierre confirmado en blockchain. Actualizando resultado...', en: 'Closure confirmed onchain. Updating result...' },
+  'detail.close_success': { es: 'Lotería cerrada correctamente.', en: 'Lottery closed successfully.' },
+  'detail.close_delayed': { es: 'El cierre fue confirmado, pero la UI tardó en actualizar. Recarga la vista.', en: 'Closure was confirmed, but the UI took longer to update. Reload the view.' },
+  'detail.close_error': { es: 'No se pudo cerrar la lotería.', en: 'Could not close the lottery.' },
+  'detail.qr.steps': { es: 'Paso 1: Aprobar USDC → Paso 2: Escanear y comprar', en: 'Step 1: Approve USDC → Step 2: Scan and buy' },
 
   // Create
   'create.title': { es: 'Crear nueva lotería', en: 'Create new lottery' },
@@ -120,6 +176,29 @@ const translations: Translations = {
   'dashboard.won': { es: 'Ganado', en: 'Won' },
   'dashboard.lost': { es: 'Perdido', en: 'Lost' },
   'dashboard.empty': { es: 'No hay datos disponibles', en: 'No data available' },
+  'dashboard.connect_to_view': { es: 'Conecta tu wallet para ver tu dashboard.', en: 'Connect your wallet to view your dashboard.' },
+  'dashboard.overview_multichain': { es: 'Vista general de tus loterías creadas y en las que participas en Base, Avalanche y Arbitrum.', en: 'Overview of your created lotteries and the ones you participate in across Base, Avalanche and Arbitrum.' },
+  'dashboard.refresh': { es: 'Actualizar', en: 'Refresh' },
+  'dashboard.created_count': { es: 'Loterías creadas', en: 'Created lotteries' },
+  'dashboard.participating_count': { es: 'Loterías donde participas', en: 'Participating lotteries' },
+  'dashboard.total_tickets_bought': { es: 'Tickets comprados', en: 'Tickets bought' },
+  'dashboard.total_pool_generated': { es: 'Pozo total generado', en: 'Total generated pool' },
+  'dashboard.creator_estimated_revenue': { es: 'Ingresos estimados del creador', en: 'Estimated creator revenue' },
+  'dashboard.creator_estimated_revenue_help': { es: 'Estimado con base en el 10% del pozo recaudado de tus loterías.', en: 'Estimated based on 10% of the pool raised by your lotteries.' },
+  'dashboard.multichain_distribution': { es: 'Distribución multichain', en: 'Multichain distribution' },
+  'dashboard.open': { es: 'Abiertas', en: 'Open' },
+  'dashboard.closed': { es: 'Cerradas', en: 'Closed' },
+  'dashboard.all': { es: 'Todas', en: 'All' },
+  'dashboard.loading': { es: 'Cargando dashboard...', en: 'Loading dashboard...' },
+  'dashboard.partial_error_title': { es: 'Algunas redes no respondieron correctamente.', en: 'Some networks did not respond correctly.' },
+  'dashboard.partial_error_body': { es: 'El dashboard mostrará las loterías que sí pudieron cargarse.', en: 'The dashboard will show the lotteries that could be loaded.' },
+  'dashboard.empty_title': { es: 'No hay loterías para mostrar', en: 'There are no lotteries to show' },
+  'dashboard.empty_created': { es: 'Aún no has creado loterías en esta vista.', en: 'You have not created lotteries in this view yet.' },
+  'dashboard.empty_participating': { es: 'Aún no participas en loterías en esta vista.', en: 'You are not participating in lotteries in this view yet.' },
+  'dashboard.created_open': { es: 'Creadas abiertas', en: 'Created open' },
+  'dashboard.created_closed': { es: 'Creadas cerradas', en: 'Created closed' },
+  'dashboard.participating_open': { es: 'Participando abiertas', en: 'Participating open' },
+  'dashboard.participating_closed': { es: 'Participando cerradas', en: 'Participating closed' },
 
   // Distribution
   'distribution.title': { es: 'Distribución de fondos', en: 'Fund distribution' },
@@ -131,16 +210,26 @@ const translations: Translations = {
 interface TranslationContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
-  t: (key: string) => string;
+  t: (key: string, vars?: TranslationVars) => string;
 }
 
 const TranslationContext = createContext<TranslationContextType | undefined>(undefined);
 
+function interpolate(template: string, vars?: TranslationVars) {
+  if (!vars) return template;
+
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => {
+    const value = vars[key];
+    return value !== undefined ? String(value) : `{{${key}}}`;
+  });
+}
+
 export function TranslationProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<Language>('es');
 
-  const t = (key: string): string => {
-    return translations[key]?.[language] || key;
+  const t = (key: string, vars?: TranslationVars): string => {
+    const base = translations[key]?.[language] || key;
+    return interpolate(base, vars);
   };
 
   return (

@@ -12,6 +12,9 @@ import {
   Loader2,
   Wallet,
   Percent,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
 } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { waitForTransactionReceipt } from '@wagmi/core';
@@ -79,6 +82,9 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
   const [purchaseTxHash, setPurchaseTxHash] = useState<`0x${string}` | null>(null);
   const [closeTxHash, setCloseTxHash] = useState<`0x${string}` | null>(null);
 
+  const [participantsOffset, setParticipantsOffset] = useState(0n);
+  const pageSize = 25n;
+
   const { chainKey, id } = parseLotteryParam(lotteryId);
   const { closeLotteryAsync, isClosing, closeError } = useCloseLottery();
   const chain = CHAIN_CONFIG[chainKey];
@@ -97,8 +103,8 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
   const participants = useLotteryParticipants({
     lotteryId: id,
     chainKey,
-    page: 0n,
-    pageSize: 25n,
+    page: participantsOffset,
+    pageSize,
   });
 
   useEffect(() => {
@@ -113,6 +119,7 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
   const ticketsSold = lottery?.ticketsSold ?? 0n;
   const remainingTickets = metrics.remainingTickets ?? maxTickets - ticketsSold;
   const currentPool = metrics.currentPool ?? lottery?.totalRaised ?? 0n;
+  const totalParticipants = lottery?.uniqueParticipants ?? 0n;
 
   const winnerPayout = (currentPool * 80n) / 100n;
   const creatorPayout = (currentPool * 10n) / 100n;
@@ -151,6 +158,23 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
     purchaseStep === 'buying' ||
     isApproving ||
     isBuying;
+
+  const totalPages =
+    totalParticipants > 0n ? Math.ceil(Number(totalParticipants) / Number(pageSize)) : 1;
+
+  const currentPage =
+    totalParticipants > 0n ? Math.floor(Number(participantsOffset) / Number(pageSize)) + 1 : 1;
+
+  const pageStart =
+    totalParticipants > 0n ? Number(participantsOffset) + 1 : 0;
+
+  const pageEnd =
+    totalParticipants > 0n
+      ? Math.min(Number(participantsOffset + pageSize), Number(totalParticipants))
+      : 0;
+
+  const canGoPrev = participantsOffset > 0n;
+  const canGoNext = participantsOffset + pageSize < totalParticipants;
 
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -220,9 +244,6 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
       if (changed || !freshIsOpen) {
         return {
           isOpen: freshIsOpen,
-          ticketsSold: freshTicketsSold as bigint,
-          remainingTickets: freshRemaining as bigint,
-          currentPool: freshCurrentPool as bigint,
         };
       }
 
@@ -264,7 +285,7 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
 
       if (needsApproval) {
         setPurchaseStep('approving');
-        setPurchaseMessage('Paso 1/2: Confirma la aprobación de USDC en tu wallet.');
+        setPurchaseMessage(t('detail.purchase_approve_wallet'));
 
         const approveHash = await approveAsync();
 
@@ -273,21 +294,19 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
         });
 
         setPurchaseStep('approved');
-        setPurchaseMessage('USDC aprobado correctamente. Verificando allowance...');
+        setPurchaseMessage(t('detail.purchase_verifying_allowance'));
 
         const refreshedAllowance = await waitForEnoughAllowance();
 
         if (refreshedAllowance < requiredAmount) {
           setPurchaseStep('error');
-          setPurchaseError(
-            'El approve salió bien, pero el allowance aún no se reflejó. Intenta de nuevo en unos segundos.'
-          );
+          setPurchaseError(t('detail.purchase_allowance_not_ready'));
           return;
         }
       }
 
       setPurchaseStep('buying');
-      setPurchaseMessage('Paso 2/2: Confirma la compra de tickets en tu wallet.');
+      setPurchaseMessage(t('detail.purchase_confirm_buy_wallet'));
 
       const buyHash = await buyTicketsAsync({
         chainKey,
@@ -309,20 +328,24 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
       if (finalState && !finalState.isOpen) {
         setPurchaseStep('success');
         setPurchaseMessage(
-          `Ya compraste ${quantitySafe} ticket${quantitySafe > 1 ? 's' : ''}. La lotería se cerró automáticamente.`
+          t('detail.purchase_success_closed', {
+            count: quantitySafe.toString(),
+          })
         );
         return;
       }
 
       setPurchaseStep('success');
-      setPurchaseMessage(`Ya compraste ${quantitySafe} ticket${quantitySafe > 1 ? 's' : ''}.`);
+      setPurchaseMessage(
+        t('detail.purchase_success', {
+          count: quantitySafe.toString(),
+        })
+      );
     } catch (err) {
       console.error(err);
       await refetchAllowance();
       setPurchaseStep('error');
-      setPurchaseError(
-        'La compra no se completó. Revisa si cancelaste una firma, si tienes balance suficiente o si la red respondió lento.'
-      );
+      setPurchaseError(t('detail.purchase_error'));
     }
   };
 
@@ -331,7 +354,7 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
 
     try {
       setIsClosingFlow(true);
-      setCloseMessage('Confirma el cierre de la lotería en tu wallet.');
+      setCloseMessage(t('detail.close_confirm_wallet'));
 
       const closeHash = await closeLotteryAsync({
         chainKey,
@@ -345,20 +368,20 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
         hash: closeHash,
       });
 
-      setCloseMessage('Cierre confirmado en blockchain. Actualizando resultado...');
+      setCloseMessage(t('detail.close_updating'));
 
       const closed = await waitForLotteryToClose();
 
       await refreshAll();
 
       if (closed) {
-        setCloseMessage('Lotería cerrada correctamente.');
+        setCloseMessage(t('detail.close_success'));
       } else {
-        setCloseMessage('El cierre fue confirmado, pero la UI tardó en actualizar. Recarga la vista.');
+        setCloseMessage(t('detail.close_delayed'));
       }
     } catch (err) {
       console.error(err);
-      setCloseMessage('No se pudo cerrar la lotería.');
+      setCloseMessage(t('detail.close_error'));
     } finally {
       setIsClosingFlow(false);
     }
@@ -367,7 +390,7 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">Cargando lotería...</p>
+        <p className="text-muted-foreground">{t('detail.loading')}</p>
       </div>
     );
   }
@@ -376,12 +399,12 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-4">
-          <p className="text-xl">No se pudo cargar la lotería</p>
+          <p className="text-xl">{t('detail.load_error')}</p>
           <button
             onClick={() => setCurrentPage('explore')}
             className="px-4 py-2 rounded-xl bg-primary text-primary-foreground"
           >
-            Volver al explorador
+            {t('detail.back_to_explorer')}
           </button>
         </div>
       </div>
@@ -390,6 +413,24 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
 
   const showActionPanel = lottery.isOpen;
   const showResultPanel = !lottery.isOpen;
+
+  const ExplorerButton = ({
+    href,
+    label,
+  }: {
+    href: string;
+    label: string;
+  }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-border bg-muted/50 hover:bg-muted transition-all text-sm"
+    >
+      <ExternalLink className="w-4 h-4" />
+      {label}
+    </a>
+  );
 
   return (
     <div className="min-h-screen">
@@ -401,7 +442,7 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
           className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-8 transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
-          Volver al explorador
+          {t('detail.back_to_explorer')}
         </motion.button>
 
         <div className="grid lg:grid-cols-3 gap-8">
@@ -424,7 +465,9 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
                       </span>
                       {!lottery.isOpen && (
                         <span className="px-3 py-1 rounded-full text-xs bg-primary/10 text-primary">
-                          {lottery.hasWinner ? 'Finalizada con ganador' : 'Finalizada sin ganador'}
+                          {lottery.hasWinner
+                            ? t('detail.status_finished_with_winner')
+                            : t('detail.status_finished_without_winner')}
                         </span>
                       )}
                     </div>
@@ -433,7 +476,7 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
                       {t('lottery.id')}: {lottery.id.toString()}
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Creador: {formatAddress(lottery.creator)}
+                      {t('detail.creator')}: {formatAddress(lottery.creator)}
                     </p>
                   </div>
                 </div>
@@ -462,7 +505,7 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
 
                 <div className="mb-6">
                   <div className="flex justify-between text-sm mb-2">
-                    <span className="text-muted-foreground">Progreso</span>
+                    <span className="text-muted-foreground">{t('detail.progress')}</span>
                     <span className="font-semibold">{progress.toFixed(1)}%</span>
                   </div>
                   <div className="h-3 bg-muted rounded-full overflow-hidden">
@@ -476,32 +519,50 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
-                  <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 transition-all">
-                    <Share2 className="w-4 h-4" />
-                    {t('detail.share')}
-                  </button>
+                <button
+                  onClick={async () => {
+                    const shareUrl = `${window.location.origin}${window.location.pathname}?lottery=${chainKey}:${id.toString()}`;
+
+                    try {
+                      if (navigator.share) {
+                        await navigator.share({
+                          title: lottery.name,
+                          text: `${t('detail.share_lottery_text')}: ${lottery.name}`,
+                          url: shareUrl,
+                        });
+                      } else if (navigator.clipboard?.writeText) {
+                        await navigator.clipboard.writeText(shareUrl);
+                        alert(t('detail.link_copied'));
+                      } else {
+                        window.prompt(t('detail.copy_this_link'), shareUrl);
+                      }
+                    } catch (err) {
+                      console.error('Share failed:', err);
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 transition-all"
+                >
+                  <Share2 className="w-4 h-4" />
+                  {t('detail.share')}
+                </button>
 
                   {createTxHash && (
-                    <a
+                    <ExplorerButton
                       href={`${chain.explorerUrl}/tx/${createTxHash}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 transition-all text-sm"
-                    >
-                      Ver creación en explorer
-                    </a>
+                      label={t('detail.view_creation_explorer')}
+                    />
                   )}
 
                   {lottery.hasWinner && (
                     <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 text-primary">
                       <Trophy className="w-4 h-4" />
-                      Ganador: {formatAddress(lottery.winner)}
+                      {t('detail.winner')}: {formatAddress(lottery.winner)}
                     </div>
                   )}
 
                   {!lottery.isOpen && !lottery.hasWinner && (
                     <div className="px-4 py-2 rounded-xl bg-muted text-muted-foreground">
-                      Cerrada sin ganador
+                      {t('detail.closed_without_winner')}
                     </div>
                   )}
                 </div>
@@ -511,25 +572,68 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
             <div className="relative">
               <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-accent/10 rounded-2xl blur-md" />
               <div className="relative backdrop-blur-md bg-card border border-border rounded-2xl p-6">
-                <h3 className="text-xl mb-4 flex items-center gap-2 font-semibold">
-                  <Users className="w-5 h-5" />
-                  {t('detail.transparency')}
-                </h3>
+                <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
+                  <h3 className="text-xl flex items-center gap-2 font-semibold">
+                    <Users className="w-5 h-5" />
+                    {t('detail.transparency')}
+                  </h3>
+
+                  <div className="text-sm text-muted-foreground">
+                    {totalParticipants > 0n
+                      ? t('detail.participants_range', {
+                          start: pageStart.toString(),
+                          end: pageEnd.toString(),
+                          total: totalParticipants.toString(),
+                        })
+                      : t('detail.no_participants')}
+                  </div>
+                </div>
 
                 <div className="space-y-3">
                   {participants.wallets.length === 0 && (
-                    <p className="text-sm text-muted-foreground">Todavía no hay participantes.</p>
+                    <p className="text-sm text-muted-foreground">{t('detail.no_participants')}</p>
                   )}
 
                   {participants.wallets.map((wallet, i) => (
-                    <div key={wallet} className="flex justify-between items-center p-3 rounded-xl bg-muted/50">
+                    <div key={`${wallet}-${i}`} className="flex justify-between items-center p-3 rounded-xl bg-muted/50">
                       <span className="font-mono text-sm">{formatAddress(wallet)}</span>
                       <span className="text-sm font-semibold">
-                        {participants.ticketCounts[i]?.toString() ?? '0'} tickets
+                        {participants.ticketCounts[i]?.toString() ?? '0'} {t('detail.tickets')}
                       </span>
                     </div>
                   ))}
                 </div>
+
+                {totalParticipants > pageSize && (
+                  <div className="mt-6 flex items-center justify-between gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setParticipantsOffset((prev) => (prev >= pageSize ? prev - pageSize : 0n))}
+                      disabled={!canGoPrev}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-border hover:bg-muted transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      {t('detail.previous')}
+                    </button>
+
+                    <div className="text-sm text-muted-foreground">
+                      {t('detail.page_of', {
+                        current: currentPage.toString(),
+                        total: totalPages.toString(),
+                      })}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setParticipantsOffset((prev) => prev + pageSize)}
+                      disabled={!canGoNext}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-border hover:bg-muted transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {t('detail.next')}
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -544,7 +648,7 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
                   {!isConnected ? (
                     <div className="text-center py-12">
                       <p className="text-muted-foreground mb-4">
-                        Conecta tu wallet para comprar tickets
+                        {t('detail.connect_wallet_to_buy')}
                       </p>
                     </div>
                   ) : (
@@ -563,7 +667,7 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
                             }}
                             className="text-sm px-3 py-1 rounded-lg border border-border hover:bg-muted transition-all"
                           >
-                            Max
+                            {t('detail.max')}
                           </button>
                         </div>
 
@@ -597,9 +701,11 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
                           <div className="flex gap-2">
                             <AlertTriangle className="w-5 h-5 text-yellow-500" />
                             <div>
-                              <p className="font-semibold">Red incorrecta</p>
+                              <p className="font-semibold">{t('detail.wrong_network')}</p>
                               <p className="text-sm text-muted-foreground">
-                                Puedes ver esta lotería desde cualquier red, pero para comprar o cerrar debes cambiar a {chain.name}.
+                                {t('detail.view_any_chain_interact_same_chain', {
+                                  chain: chain.name,
+                                })}
                               </p>
                             </div>
                           </div>
@@ -609,14 +715,16 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
                             disabled={isSwitching}
                             className="w-full px-4 py-3 rounded-xl bg-primary text-primary-foreground disabled:opacity-50"
                           >
-                            {isSwitching ? 'Cambiando red...' : `Cambiar a ${chain.name}`}
+                            {isSwitching
+                              ? t('detail.switching_network')
+                              : t('detail.switch_to_chain', { chain: chain.name })}
                           </button>
                         </div>
                       )}
 
                       <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-3">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-semibold">Flujo de compra</span>
+                          <span className="text-sm font-semibold">{t('detail.purchase_flow')}</span>
                           {(purchaseStep === 'approved' || purchaseStep === 'buying' || purchaseStep === 'success') && (
                             <CheckCircle2 className="w-5 h-5 text-primary" />
                           )}
@@ -624,20 +732,14 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
 
                         <div className="text-sm text-muted-foreground">
                           {purchaseStep === 'idle' && !hasEnoughAllowance && (
-                            <p>Con un solo click iniciaremos approve y luego la compra automáticamente.</p>
+                            <p>{t('detail.purchase_flow_explain_approve_then_buy')}</p>
                           )}
                           {purchaseStep === 'idle' && hasEnoughAllowance && (
-                            <p>Ya tienes aprobación suficiente. Iremos directo a la compra.</p>
+                            <p>{t('detail.purchase_flow_explain_direct_buy')}</p>
                           )}
-                          {purchaseStep === 'approving' && (
-                            <p>Paso 1/2: Confirma la aprobación de USDC en tu wallet.</p>
-                          )}
-                          {purchaseStep === 'approved' && (
-                            <p>USDC aprobado correctamente. Preparando compra...</p>
-                          )}
-                          {purchaseStep === 'buying' && (
-                            <p>Paso 2/2: Confirma la compra de tickets en tu wallet.</p>
-                          )}
+                          {purchaseStep === 'approving' && <p>{t('detail.purchase_approve_wallet')}</p>}
+                          {purchaseStep === 'approved' && <p>{t('detail.purchase_preparing')}</p>}
+                          {purchaseStep === 'buying' && <p>{t('detail.purchase_confirm_buy_wallet')}</p>}
                           {purchaseStep === 'success' && <p>{purchaseMessage}</p>}
                           {purchaseStep === 'error' && <p className="text-red-500">{purchaseError}</p>}
                         </div>
@@ -651,30 +753,26 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
                         <span className="flex items-center justify-center gap-2 whitespace-nowrap">
                           {isProcessing && <Loader2 className="w-5 h-5 shrink-0 animate-spin" />}
                           <span className="inline-flex items-center leading-none font-medium">
-                            {purchaseStep === 'idle' && 'Comprar tickets'}
-                            {purchaseStep === 'approving' && 'Paso 1/2: Aprobando USDC...'}
-                            {purchaseStep === 'approved' && 'Preparando compra...'}
-                            {purchaseStep === 'buying' && 'Paso 2/2: Comprando tickets...'}
-                            {purchaseStep === 'success' && 'Comprar de nuevo'}
-                            {purchaseStep === 'error' && 'Intentar de nuevo'}
+                            {purchaseStep === 'idle' && t('detail.buy_tickets')}
+                            {purchaseStep === 'approving' && t('detail.button_approving')}
+                            {purchaseStep === 'approved' && t('detail.button_preparing')}
+                            {purchaseStep === 'buying' && t('detail.button_buying')}
+                            {purchaseStep === 'success' && t('detail.buy_again')}
+                            {purchaseStep === 'error' && t('detail.try_again')}
                           </span>
                         </span>
                       </button>
 
                       {purchaseTxHash && (
-                        <a
+                        <ExplorerButton
                           href={`${chain.explorerUrl}/tx/${purchaseTxHash}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block text-sm text-primary underline break-all"
-                        >
-                          Ver compra en el explorer
-                        </a>
+                          label={t('detail.view_purchase_explorer')}
+                        />
                       )}
 
                       {(approveError || buyError) && purchaseStep !== 'error' && (
                         <p className="text-sm text-red-500">
-                          La transacción no se completó. Revisa la wallet, allowance o balance.
+                          {t('detail.transaction_incomplete')}
                         </p>
                       )}
 
@@ -692,7 +790,7 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
                             <QrCode className="w-24 h-24 text-gray-300" />
                           </div>
                           <p className="text-sm text-muted-foreground">
-                            Paso 1: Aprobar USDC → Paso 2: Escanear y comprar
+                            {t('detail.qr.steps')}
                           </p>
                         </div>
                       )}
@@ -705,7 +803,9 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
                             className="w-full px-4 py-3 rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                           >
                             {(isClosingFlow || isClosing) && <Loader2 className="w-4 h-4 animate-spin" />}
-                            {isClosingFlow || isClosing ? 'Cerrando lotería...' : t('detail.close')}
+                            {isClosingFlow || isClosing
+                              ? t('detail.button_closing')
+                              : t('detail.close')}
                           </button>
 
                           {closeMessage && (
@@ -713,19 +813,15 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
                           )}
 
                           {closeTxHash && (
-                            <a
+                            <ExplorerButton
                               href={`${chain.explorerUrl}/tx/${closeTxHash}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="block text-sm text-primary underline break-all"
-                            >
-                              Ver cierre en el explorer
-                            </a>
+                              label={t('detail.view_close_explorer')}
+                            />
                           )}
 
                           {closeError && (
                             <p className="text-sm text-red-500">
-                              Error cerrando la lotería.
+                              {t('detail.close_error')}
                             </p>
                           )}
                         </div>
@@ -742,9 +838,11 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
               <div className="sticky top-24">
                 <div className="relative backdrop-blur-md bg-card border border-border rounded-2xl p-6 space-y-6">
                   <div>
-                    <h3 className="text-2xl font-semibold mb-2">Resultado</h3>
+                    <h3 className="text-2xl font-semibold mb-2">{t('detail.result')}</h3>
                     <p className="text-sm text-muted-foreground">
-                      {lottery.hasWinner ? 'Lotería finalizada con ganador' : 'Lotería finalizada sin ganador'}
+                      {lottery.hasWinner
+                        ? t('detail.status_finished_with_winner')
+                        : t('detail.status_finished_without_winner')}
                     </p>
                   </div>
 
@@ -753,11 +851,11 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
                       <div className="p-4 rounded-xl bg-primary/10 border border-primary/20">
                         <div className="flex items-center gap-2 mb-2">
                           <Trophy className="w-5 h-5 text-primary" />
-                          <span className="font-semibold">Ganador</span>
+                          <span className="font-semibold">{t('detail.winner')}</span>
                         </div>
                         <p className="font-mono break-all mb-2">{lottery.winner}</p>
                         <p className="text-sm text-muted-foreground">
-                          Ticket ganador: {lottery.winningTicket.toString()}
+                          {t('detail.winning_ticket')}: {lottery.winningTicket.toString()}
                         </p>
                       </div>
 
@@ -765,7 +863,7 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
                         <div className="p-4 rounded-xl bg-muted/50">
                           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
                             <Wallet className="w-4 h-4" />
-                            Premio del ganador
+                            {t('detail.winner_prize')}
                           </div>
                           <div className="text-2xl font-bold text-primary">
                             {formatUSDC(winnerPayout)} USDC
@@ -775,7 +873,7 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
                         <div className="p-4 rounded-xl bg-muted/50">
                           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
                             <Users className="w-4 h-4" />
-                            Ganancia del creador
+                            {t('detail.creator_earnings')}
                           </div>
                           <div className="text-xl font-bold">
                             {formatUSDC(creatorPayout)} USDC
@@ -785,7 +883,7 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
                         <div className="p-4 rounded-xl bg-muted/50">
                           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
                             <Percent className="w-4 h-4" />
-                            Fees distribuidos
+                            {t('detail.fees_distributed')}
                           </div>
                           <div className="text-xl font-bold">
                             {formatUSDC(feesPayout)} USDC
@@ -796,31 +894,23 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
                   ) : (
                     <div className="p-4 rounded-xl bg-muted/50">
                       <p className="text-muted-foreground">
-                        Esta lotería cerró sin ganador. No hubo tickets válidos para el sorteo final.
+                        {t('detail.closed_without_winner_explain')}
                       </p>
                     </div>
                   )}
 
                   {createTxHash && (
-                    <a
+                    <ExplorerButton
                       href={`${chain.explorerUrl}/tx/${createTxHash}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block text-sm text-primary underline break-all"
-                    >
-                      Ver creación en explorer
-                    </a>
+                      label={t('detail.view_creation_explorer')}
+                    />
                   )}
 
                   {closeTxHash && (
-                    <a
+                    <ExplorerButton
                       href={`${chain.explorerUrl}/tx/${closeTxHash}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block text-sm text-primary underline break-all"
-                    >
-                      Ver cierre en el explorer
-                    </a>
+                      label={t('detail.view_close_explorer')}
+                    />
                   )}
 
                   {closeMessage && (

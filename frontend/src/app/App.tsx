@@ -2,11 +2,23 @@ import { useState, useEffect } from 'react';
 import { TranslationProvider } from './context/TranslationContext';
 import { WalletProvider } from './context/WalletContext';
 import { Header } from './components/Header';
-import { BackgroundGlow } from './components/BackgroundGlow';
 import { HomePage } from './components/HomePage';
 import { LotteryDetail } from './components/LotteryDetail';
 import { CreateLottery } from './components/CreateLottery';
 import { Dashboard } from './components/Dashboard';
+
+function isValidLotteryParam(value: string | null): value is string {
+  if (!value) return false;
+
+  const parts = value.split(':');
+  if (parts.length !== 2) return false;
+
+  const [chain, id] = parts;
+  const validChain = ['base', 'avalanche', 'arbitrum'].includes(chain);
+  const validId = /^\d+$/.test(id);
+
+  return validChain && validId;
+}
 
 export default function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
@@ -21,25 +33,51 @@ export default function App() {
     }
   }, [theme]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const lotteryParam = params.get('lottery');
+
+    if (isValidLotteryParam(lotteryParam)) {
+      setSelectedLottery(lotteryParam);
+      setCurrentPage('detail');
+    }
+  }, []);
+
   const toggleTheme = () => {
     setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
   };
 
+  const syncLotteryInUrl = (lotteryId: string | null) => {
+    const url = new URL(window.location.href);
+
+    if (lotteryId) {
+      url.searchParams.set('lottery', lotteryId);
+    } else {
+      url.searchParams.delete('lottery');
+    }
+
+    window.history.pushState({}, '', url.toString());
+  };
+
   const handlePageChange = (page: string) => {
     setCurrentPage(page);
-    setSelectedLottery(null);
+
+    if (page !== 'detail') {
+      setSelectedLottery(null);
+      syncLotteryInUrl(null);
+    }
   };
 
   const handleLotterySelect = (id: string) => {
     setSelectedLottery(id);
     setCurrentPage('detail');
+    syncLotteryInUrl(id);
   };
 
   return (
     <TranslationProvider>
       <WalletProvider>
         <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
-          {/* <BackgroundGlow /> */}
           <Header
             theme={theme}
             toggleTheme={toggleTheme}
