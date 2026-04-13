@@ -31,6 +31,7 @@ import { useCloseLottery } from '../../hooks/useCloseLottery';
 import { getPublicClient } from '../../lib/publicClients';
 import { getRaffleContract } from '../../lib/contracts';
 import {
+  addActivityItem,
   getLotteryTxRegistry,
   saveBuyTxHash,
   saveCloseTxHash,
@@ -316,6 +317,13 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
 
       setPurchaseTxHash(buyHash);
       saveBuyTxHash(chainKey, id, buyHash);
+      addActivityItem({
+        type: 'buy',
+        chainKey,
+        lotteryId: id,
+        lotteryName: lottery?.name,
+        txHash: buyHash,
+      });
 
       await waitForTransactionReceipt(wagmiConfig, {
         hash: buyHash,
@@ -363,6 +371,13 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
 
       setCloseTxHash(closeHash);
       saveCloseTxHash(chainKey, id, closeHash);
+      addActivityItem({
+        type: 'close',
+        chainKey,
+        lotteryId: id,
+        lotteryName: lottery?.name,
+        txHash: closeHash,
+      });
 
       await waitForTransactionReceipt(wagmiConfig, {
         hash: closeHash,

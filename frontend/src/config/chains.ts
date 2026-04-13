@@ -26,7 +26,7 @@ export const CHAIN_CONFIG: Record<SupportedChainKey, ChainConfig> = {
     explorerUrl: 'https://sepolia.basescan.org',
     color: '#22c55e',
     isDefault: true,
-    rpcUrl: 'https://sepolia.base.org',
+    rpcUrl: 'https://base-sepolia-rpc.publicnode.com',
   },
   avalanche: {
     key: 'avalanche',

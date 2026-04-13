@@ -6,8 +6,9 @@ import { useWallet } from '../../hooks/uswWallet';
 import { useCreateLottery } from '../../hooks/useCreateLottery';
 import { useSwitchToChain } from '../../hooks/useSwitchToChain';
 import { SUPPORTED_CHAINS, CHAIN_CONFIG, type SupportedChainKey } from '../../config/chains';
-import { saveCreateTxHash } from '../../lib/txRegistry';
+import { addActivityItem, saveCreateTxHash } from '../../lib/txRegistry';
 import { useAccount } from 'wagmi';
+
 
 interface CreateLotteryProps {
   setCurrentPage: (page: string) => void;
@@ -62,6 +63,13 @@ export function CreateLottery({ setCurrentPage, setSelectedLottery }: CreateLott
     
         setCreateTxHash(result.hash);
         saveCreateTxHash(selectedChain, result.lotteryId, result.hash);
+        addActivityItem({
+          type: 'create',
+          chainKey: selectedChain,
+          lotteryId: result.lotteryId,
+          lotteryName: name.trim(),
+          txHash: result.hash,
+        });
     
         if (setSelectedLottery) {
           setSelectedLottery(`${selectedChain}:${result.lotteryId.toString()}`);

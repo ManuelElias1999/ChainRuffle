@@ -9,6 +9,8 @@ import {
   CheckCircle2,
   Ticket,
   RefreshCw,
+  ExternalLink,
+  History,
 } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 import { useAllLotteries } from '../../hooks/useAllLotteries';
@@ -16,6 +18,7 @@ import { useParticipationMap } from '../../hooks/useParticipationMap';
 import { CHAIN_CONFIG, type SupportedChainKey } from '../../config/chains';
 import { formatAddress, formatUSDC } from '../../lib/formatters';
 import type { Lottery } from '../../types/lottery';
+import { getActivityItems, type ActivityItem } from '../../lib/txRegistry';
 
 interface DashboardProps {
   setCurrentPage: (page: string) => void;
@@ -23,7 +26,7 @@ interface DashboardProps {
 }
 
 type OwnershipTab = 'created' | 'participating';
-type StatusTab = 'open' | 'closed' | 'all';
+type ActivityTab = 'all' | 'create' | 'buy' | 'close';
 
 const chainColors: Record<SupportedChainKey, string> = {
   base: 'from-blue-500 to-blue-600',
@@ -45,9 +48,18 @@ export function Dashboard({ setCurrentPage, setSelectedLottery }: DashboardProps
 
   const [ownershipTab, setOwnershipTab] = useState<OwnershipTab>('created');
   const [statusTab, setStatusTab] = useState<StatusTab>('open');
+  const [activityTab, setActivityTab] = useState<ActivityTab>('all');
+
+  const activityItems = useMemo(() => getActivityItems(), []);
+
+  const filteredActivityItems = useMemo(() => {
+    if (activityTab === 'all') return activityItems;
+    return activityItems.filter((item) => item.type === activityTab);
+  }, [activityItems, activityTab]);
 
   const myCreatedLotteries = useMemo(() => {
     if (!address) return [];
+
     return lotteries.filter(
       (lottery) => lottery.creator.toLowerCase() === address.toLowerCase()
     );
@@ -56,7 +68,8 @@ export function Dashboard({ setCurrentPage, setSelectedLottery }: DashboardProps
   const myParticipatingLotteries = useMemo(() => {
     return lotteries.filter((lottery) => {
       const key = `${lottery.chain}:${lottery.id.toString()}`;
-      return (participationMap[key] ?? 0n) > 0n;
+      const myTickets = participationMap[key] ?? 0n;
+      return myTickets > 0n;
     });
   }, [lotteries, participationMap]);
 
@@ -269,6 +282,7 @@ export function Dashboard({ setCurrentPage, setSelectedLottery }: DashboardProps
                     lottery={lottery}
                     myTickets={myTickets}
                     showMyTickets={ownershipTab === 'participating'}
+                    ownershipTab={ownershipTab}
                     onOpen={() => openLotteryDetail(lottery)}
                   />
                 </motion.div>
@@ -299,6 +313,39 @@ export function Dashboard({ setCurrentPage, setSelectedLottery }: DashboardProps
             icon={CheckCircle2}
           />
         </div>
+
+        <div className="mt-10 rounded-2xl border border-border bg-card p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <History className="w-5 h-5 text-primary" />
+            <h3 className="text-xl font-semibold">{t('dashboard.recent_activity')}</h3>
+          </div>
+
+          <div className="flex flex-wrap gap-3 mb-6">
+            <TabButton active={activityTab === 'all'} onClick={() => setActivityTab('all')}>
+              {t('dashboard.activity_filter_all')}
+            </TabButton>
+            <TabButton active={activityTab === 'create'} onClick={() => setActivityTab('create')}>
+              {t('dashboard.activity_filter_create')}
+            </TabButton>
+            <TabButton active={activityTab === 'buy'} onClick={() => setActivityTab('buy')}>
+              {t('dashboard.activity_filter_buy')}
+            </TabButton>
+            <TabButton active={activityTab === 'close'} onClick={() => setActivityTab('close')}>
+              {t('dashboard.activity_filter_close')}
+            </TabButton>
+          </div>
+
+          {filteredActivityItems.length === 0 ? (
+            <p className="text-muted-foreground">{t('dashboard.no_activity')}</p>
+          ) : (
+            <div className="space-y-3">
+              {filteredActivityItems.slice(0, 12).map((item) => (
+                <ActivityRow key={item.id} item={item} />
+              ))}
+            </div>
+          )}
+        </div>
+
       </div>
     </div>
   );
@@ -378,13 +425,16 @@ function DashboardLotteryCard({
   lottery,
   myTickets,
   showMyTickets,
+  ownershipTab,
   onOpen,
 }: {
   lottery: Lottery;
   myTickets: bigint;
   showMyTickets: boolean;
+  ownershipTab: 'created' | 'participating';
   onOpen: () => void;
 }) {
+  const { t } = useTranslation();
   const chain = CHAIN_CONFIG[lottery.chain];
   const currentPool = lottery.totalRaised;
   const creatorRevenue = (lottery.totalRaised * 10n) / 100n;
@@ -400,7 +450,44 @@ function DashboardLotteryCard({
     >
       <div className="flex items-start justify-between gap-4 mb-5">
         <div>
-          <h3 className="text-2xl font-bold mb-1">{lottery.name}</h3>
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <h3 className="text-2xl font-bold">{lottery.name}</h3>
+
+            {ownershipTab === 'created' && (
+              <span className="px-2 py-1 rounded-full text-[10px] bg-primary/10 text-primary">
+                {t('dashboard.badge_created')}
+              </span>
+            )}
+
+            {ownershipTab === 'participating' && (
+              <span className="px-2 py-1 rounded-full text-[10px] bg-cyan-500/15 text-cyan-600">
+                {t('dashboard.badge_participating')}
+              </span>
+            )}
+
+            {lottery.isOpen ? (
+              <span className="px-2 py-1 rounded-full text-[10px] bg-emerald-500/15 text-emerald-600">
+                {t('dashboard.badge_open')}
+              </span>
+            ) : (
+              <span className="px-2 py-1 rounded-full text-[10px] bg-muted text-muted-foreground">
+                {t('dashboard.badge_closed')}
+              </span>
+            )}
+
+            {!lottery.isOpen && lottery.hasWinner && (
+              <span className="px-2 py-1 rounded-full text-[10px] bg-yellow-500/15 text-yellow-600">
+                {t('dashboard.badge_winner_selected')}
+              </span>
+            )}
+
+            {!lottery.isOpen && !lottery.hasWinner && (
+              <span className="px-2 py-1 rounded-full text-[10px] bg-muted text-muted-foreground">
+                {t('dashboard.badge_closed_no_winner')}
+              </span>
+            )}
+          </div>
+
           <p className="text-sm text-muted-foreground">ID: {lottery.id.toString()}</p>
         </div>
 
@@ -410,30 +497,22 @@ function DashboardLotteryCard({
           >
             {chain.name}
           </span>
-
-          <span
-            className={`px-3 py-1 rounded-full text-xs ${
-              lottery.isOpen ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
-            }`}
-          >
-            {lottery.isOpen ? 'Open' : 'Closed'}
-          </span>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-5">
         <div className="rounded-xl bg-muted/40 p-4">
-          <p className="text-xs text-muted-foreground mb-1">Current pool</p>
+          <p className="text-xs text-muted-foreground mb-1">{t('dashboard.current_pool')}</p>
           <p className="font-bold text-primary">{formatUSDC(currentPool)} USDC</p>
         </div>
 
         <div className="rounded-xl bg-muted/40 p-4">
-          <p className="text-xs text-muted-foreground mb-1">Creator 10%</p>
+          <p className="text-xs text-muted-foreground mb-1">{t('dashboard.creator_share')}</p>
           <p className="font-bold">{formatUSDC(creatorRevenue)} USDC</p>
         </div>
 
         <div className="rounded-xl bg-muted/40 p-4">
-          <p className="text-xs text-muted-foreground mb-1">Sold</p>
+          <p className="text-xs text-muted-foreground mb-1">{t('dashboard.sold')}</p>
           <p className="font-bold">
             {lottery.ticketsSold.toString()} / {lottery.maxTickets.toString()}
           </p>
@@ -441,7 +520,7 @@ function DashboardLotteryCard({
 
         <div className="rounded-xl bg-muted/40 p-4">
           <p className="text-xs text-muted-foreground mb-1">
-            {showMyTickets ? 'My tickets' : 'Participants'}
+            {showMyTickets ? t('dashboard.my_tickets_label') : t('dashboard.participants_label')}
           </p>
           <p className="font-bold">
             {showMyTickets ? myTickets.toString() : lottery.uniqueParticipants.toString()}
@@ -451,7 +530,7 @@ function DashboardLotteryCard({
 
       <div className="mb-4">
         <div className="flex justify-between text-sm mb-2">
-          <span className="text-muted-foreground">Progress</span>
+          <span className="text-muted-foreground">{t('dashboard.progress')}</span>
           <span>{progress.toFixed(1)}%</span>
         </div>
 
@@ -465,15 +544,57 @@ function DashboardLotteryCard({
 
       {!lottery.isOpen && lottery.hasWinner && (
         <div className="rounded-xl bg-primary/10 text-primary px-4 py-3 text-sm">
-          Winner: {formatAddress(lottery.winner)}
+          {t('dashboard.winner_label')}: {formatAddress(lottery.winner)}
         </div>
       )}
 
       {!lottery.isOpen && !lottery.hasWinner && (
         <div className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
-          Closed without winner
+          {t('dashboard.badge_closed_no_winner')}
         </div>
       )}
     </button>
+  );
+}
+
+function ActivityRow({ item }: { item: ActivityItem }) {
+  const { t } = useTranslation();
+  const chain = CHAIN_CONFIG[item.chainKey as SupportedChainKey];
+
+  const label =
+    item.type === 'create'
+      ? t('dashboard.activity_create')
+      : item.type === 'buy'
+      ? t('dashboard.activity_buy')
+      : t('dashboard.activity_close');
+
+  const formattedDate = new Date(item.timestamp).toLocaleString();
+
+  return (
+    <div className="rounded-xl border border-border bg-muted/30 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 flex-wrap mb-1">
+          <span className="text-sm font-semibold">{label}</span>
+          <span className="px-2 py-1 rounded-full text-[10px] bg-primary/10 text-primary">
+            {chain?.shortName ?? item.chainKey.toUpperCase()}
+          </span>
+        </div>
+
+        <p className="text-sm text-muted-foreground truncate">
+          {item.lotteryName ?? t('dashboard.lottery_fallback', { id: item.lotteryId })} · ID {item.lotteryId}
+        </p>
+        <p className="text-xs text-muted-foreground mt-1">{formattedDate}</p>
+      </div>
+
+      <a
+        href={`${chain.explorerUrl}/tx/${item.txHash}`}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-border bg-card hover:bg-muted transition-all text-sm"
+      >
+        <ExternalLink className="w-4 h-4" />
+        {t('dashboard.view_in_explorer')}
+      </a>
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 import { motion } from 'motion/react';
 import { useTranslation } from '../context/TranslationContext';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ChevronDown,
   TrendingUp,
@@ -46,8 +46,9 @@ export function HomePage({ setCurrentPage, setSelectedLottery }: HomePageProps) 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedChain, setSelectedChain] = useState<SupportedChainKey | 'all'>('all');
   const [sortBy, setSortBy] = useState('highestPool');
+  const [stableOpenLotteries, setStableOpenLotteries] = useState<Lottery[]>([]);
 
-  const filteredLotteries = openLotteries
+  const filteredLotteries = stableOpenLotteries
     .filter((lottery) => {
       const lotteryKey = `${lottery.chain}:${lottery.id.toString()}`;
 
@@ -81,14 +82,23 @@ export function HomePage({ setCurrentPage, setSelectedLottery }: HomePageProps) 
           return 0;
       }
     });
+  
+  useEffect(() => {
+    if (openLotteries.length === 0) return;
+  
+    // evita flicker si llega lista parcial
+    if (openLotteries.length < stableOpenLotteries.length) return;
+  
+    setStableOpenLotteries(openLotteries);
+  }, [openLotteries]);
 
-  const totalPool = openLotteries.reduce((acc, lottery) => acc + lottery.totalRaised, 0n);
+  const totalPool = stableOpenLotteries.reduce((acc, lottery) => acc + lottery.totalRaised, 0n);
 
-  const highestPool = openLotteries.reduce((highest, lottery) => {
+  const highestPool = stableOpenLotteries.reduce((highest, lottery) => {
     return lottery.totalRaised > highest ? lottery.totalRaised : highest;
   }, 0n);
 
-  const totalParticipants = openLotteries.reduce(
+  const totalParticipants = stableOpenLotteries.reduce(
     (acc, lottery) => acc + Number(lottery.uniqueParticipants),
     0
   );
@@ -96,7 +106,7 @@ export function HomePage({ setCurrentPage, setSelectedLottery }: HomePageProps) 
   const stats = [
     {
       label: t('home.stats.open'),
-      value: openLotteries.length.toString(),
+      value: stableOpenLotteries.length.toString(),
       icon: Sparkles,
       color: 'from-emerald-500 to-green-500',
     },
@@ -334,7 +344,7 @@ export function HomePage({ setCurrentPage, setSelectedLottery }: HomePageProps) 
               onClick={refetch}
               className="px-4 py-2 rounded-xl border border-border hover:bg-muted transition-all text-sm"
             >
-              Actualizar
+              {t('home.refresh')}
             </button>
           </div>
 
@@ -381,32 +391,32 @@ export function HomePage({ setCurrentPage, setSelectedLottery }: HomePageProps) 
 
           {isLoading && (
             <div className="py-16 text-center text-muted-foreground">
-              Cargando loterías multichain...
+              {t('home.loading_lotteries')}
             </div>
           )}
 
           {hasError && (
             <div className="py-6 px-6 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 mb-8">
               <p className="text-yellow-600 font-semibold mb-2">
-                Algunas redes no respondieron correctamente.
+                {t('home.partial_error_title')}
               </p>
               <p className="text-sm text-muted-foreground mb-4">
-                Se mostrarán las loterías disponibles de las redes que sí cargaron.
+                {t('home.partial_error_body')}
               </p>
               <button
                 onClick={refetch}
                 className="px-4 py-2 rounded-xl bg-primary text-primary-foreground"
               >
-                Reintentar
+                {t('home.retry')}
               </button>
             </div>
           )}
 
-          {!isLoading && filteredLotteries.length === 0 && (
+          {!isLoading && stableOpenLotteries.length === 0 && (
             <div className="py-16 text-center rounded-2xl border border-border bg-card">
-              <p className="text-xl mb-2">No hay loterías abiertas</p>
+              <p className="text-xl mb-2">{t('home.no_open_title')}</p>
               <p className="text-muted-foreground mb-6">
-                Crea la primera lotería o cambia los filtros.
+                {t('home.no_open_body')}
               </p>
               <button
                 onClick={() => setCurrentPage('create')}
@@ -480,6 +490,7 @@ function InfoCard({
 }
 
 function RealLotteryCard({ lottery, onClick }: { lottery: Lottery; onClick: () => void }) {
+  const { t } = useTranslation();
   const chain = CHAIN_CONFIG[lottery.chain];
   const currentPool = lottery.totalRaised;
   const maxPool = lottery.ticketPrice * lottery.maxTickets;
@@ -488,6 +499,10 @@ function RealLotteryCard({ lottery, onClick }: { lottery: Lottery; onClick: () =
     lottery.maxTickets > 0n
       ? Number((lottery.ticketsSold * 10000n) / lottery.maxTickets) / 100
       : 0;
+
+  const isAlmostFull = progress >= 80;
+  const isHighPool = currentPool >= 100_000_000n; // 100 USDC con 6 decimales
+  const isNew = lottery.id >= 2n;
 
   return (
     <button
@@ -499,7 +514,28 @@ function RealLotteryCard({ lottery, onClick }: { lottery: Lottery; onClick: () =
       <div className="relative backdrop-blur-md bg-card border border-border rounded-2xl p-6 h-full">
         <div className="flex items-start justify-between gap-4 mb-5">
           <div>
-            <h3 className="text-xl font-bold mb-1">{lottery.name}</h3>
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <h3 className="text-xl font-bold">{lottery.name}</h3>
+
+              {isNew && (
+                <span className="px-2 py-1 rounded-full text-[10px] bg-primary/10 text-primary">
+                  {t('home.badge.new')}
+                </span>
+              )}
+
+              {isAlmostFull && (
+                <span className="px-2 py-1 rounded-full text-[10px] bg-yellow-500/15 text-yellow-600">
+                  {t('home.badge.almostFull')}
+                </span>
+              )}
+
+              {isHighPool && (
+                <span className="px-2 py-1 rounded-full text-[10px] bg-emerald-500/15 text-emerald-600">
+                  {t('home.badge.highPool')}
+                </span>
+              )}
+            </div>
+
             <p className="text-sm text-muted-foreground">ID: {lottery.id.toString()}</p>
           </div>
 
@@ -512,17 +548,17 @@ function RealLotteryCard({ lottery, onClick }: { lottery: Lottery; onClick: () =
 
         <div className="space-y-3 mb-5">
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Creador</span>
+            <span className="text-muted-foreground">{t('home.creator_label')}</span>
             <span className="font-mono">{formatAddress(lottery.creator)}</span>
           </div>
 
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Ticket</span>
+            <span className="text-muted-foreground">{t('home.ticket_label')}</span>
             <span>{formatUSDC(lottery.ticketPrice)} USDC</span>
           </div>
 
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Vendidos</span>
+            <span className="text-muted-foreground">{t('home.sold_label')}</span>
             <span>
               {lottery.ticketsSold.toString()} / {lottery.maxTickets.toString()}
             </span>
@@ -531,7 +567,7 @@ function RealLotteryCard({ lottery, onClick }: { lottery: Lottery; onClick: () =
 
         <div className="mb-5">
           <div className="flex justify-between text-sm mb-2">
-            <span className="text-muted-foreground">Progreso</span>
+            <span className="text-muted-foreground">{t('home.progress_label')}</span>
             <span>{progress.toFixed(1)}%</span>
           </div>
 
@@ -545,12 +581,12 @@ function RealLotteryCard({ lottery, onClick }: { lottery: Lottery; onClick: () =
 
         <div className="grid grid-cols-2 gap-3">
           <div className="p-3 rounded-xl bg-muted/50">
-            <p className="text-xs text-muted-foreground mb-1">Pozo actual</p>
+            <p className="text-xs text-muted-foreground mb-1">{t('home.current_pool_label')}</p>
             <p className="font-bold text-primary">{formatUSDC(currentPool)} USDC</p>
           </div>
 
           <div className="p-3 rounded-xl bg-muted/50">
-            <p className="text-xs text-muted-foreground mb-1">Pozo máximo</p>
+            <p className="text-xs text-muted-foreground mb-1">{t('home.max_pool_label')}</p>
             <p className="font-bold">{formatUSDC(maxPool)} USDC</p>
           </div>
         </div>

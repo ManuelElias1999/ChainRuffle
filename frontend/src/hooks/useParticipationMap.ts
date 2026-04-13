@@ -37,50 +37,90 @@ export function useParticipationMap(lotteries: Lottery[], address?: Address) {
         setIsLoading(true);
         setHasError(false);
 
-        const results = await Promise.all(
+        const results = await Promise.allSettled(
           lotteries.map(async (lottery) => {
-            try {
-              const client = getPublicClient(lottery.chain);
-              const contract = getRaffleContract(lottery.chain);
+            const client = getPublicClient(lottery.chain);
+            const contract = getRaffleContract(lottery.chain);
+            const key = `${lottery.chain}:${lottery.id.toString()}`;
 
-              const tickets = (await client.readContract({
+            let tickets = 0n;
+
+            // 1) Intentar por ticketsByUser
+            try {
+              const readTickets = (await client.readContract({
                 address: contract.address,
                 abi: contract.abi,
                 functionName: 'ticketsByUser',
                 args: [lottery.id, address],
               })) as bigint;
 
-              return {
-                key: `${lottery.chain}:${lottery.id.toString()}`,
-                tickets,
-              };
+              tickets = readTickets;
             } catch (err) {
-              console.error(
-                `[useParticipationMap] ${lottery.chain}:${lottery.id.toString()}`,
-                err
-              );
-              return {
-                key: `${lottery.chain}:${lottery.id.toString()}`,
-                tickets: 0n,
-              };
+              console.error(`[useParticipationMap:ticketsByUser] ${key}`, err);
             }
+
+            // 2) Fallback: revisar participants page
+            if (tickets === 0n) {
+              try {
+                const participantLimit =
+                  lottery.uniqueParticipants > 0n ? lottery.uniqueParticipants : 50n;
+
+                const page = (await client.readContract({
+                  address: contract.address,
+                  abi: contract.abi,
+                  functionName: 'getParticipantsPage',
+                  args: [lottery.id, 0n, participantLimit],
+                })) as readonly [readonly `0x${string}`[], readonly bigint[]];
+
+                const wallets = page[0] ?? [];
+                const ticketCounts = page[1] ?? [];
+
+                const index = wallets.findIndex(
+                  (wallet) => wallet.toLowerCase() === address.toLowerCase()
+                );
+
+                if (index >= 0) {
+                  tickets = ticketCounts[index] ?? 0n;
+                }
+              } catch (err) {
+                console.error(`[useParticipationMap:getParticipantsPage] ${key}`, err);
+              }
+            }
+
+            return {
+              key,
+              tickets,
+            };
           })
         );
 
         if (cancelled) return;
 
-        const nextMap: ParticipationMap = {};
-        for (const item of results) {
-          nextMap[item.key] = item.tickets;
-        }
+        setParticipationMap((prev) => {
+          const nextMap: ParticipationMap = { ...prev };
 
-        setParticipationMap(nextMap);
+          results.forEach((result, index) => {
+            const lottery = lotteries[index];
+            const key = `${lottery.chain}:${lottery.id.toString()}`;
+
+            if (result.status === 'fulfilled') {
+              nextMap[key] = result.value.tickets;
+            } else {
+              console.error(`[useParticipationMap] ${key}`, result.reason);
+              if (!(key in nextMap)) {
+                nextMap[key] = 0n;
+              }
+            }
+          });
+
+          return nextMap;
+        });
+
         lastLoadedKeyRef.current = requestKey;
       } catch (err) {
         if (cancelled) return;
         console.error('[useParticipationMap] global error', err);
         setHasError(true);
-        setParticipationMap({});
       } finally {
         if (!cancelled) {
           setIsLoading(false);
