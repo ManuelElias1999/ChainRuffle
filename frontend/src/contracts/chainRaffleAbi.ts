@@ -1,0 +1,108 @@
+export const chainRaffleAbi = [
+  {
+    type: 'function',
+    name: 'createLottery',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'name', type: 'string' },
+      { name: 'ticketPrice', type: 'uint256' },
+      { name: 'maxTickets', type: 'uint256' },
+    ],
+    outputs: [{ name: 'lotteryId', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'totalLotteries',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'buyTickets',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'lotteryId', type: 'uint256' },
+      { name: 'ticketAmount', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'closeLottery',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'lotteryId', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'getLottery',
+    stateMutability: 'view',
+    inputs: [{ name: 'lotteryId', type: 'uint256' }],
+    outputs: [
+      {
+        name: '',
+        type: 'tuple',
+        components: [
+          { name: 'id', type: 'uint256' },
+          { name: 'name', type: 'string' },
+          { name: 'creator', type: 'address' },
+          { name: 'ticketPrice', type: 'uint256' },
+          { name: 'maxTickets', type: 'uint256' },
+          { name: 'ticketsSold', type: 'uint256' },
+          { name: 'totalRaised', type: 'uint256' },
+          { name: 'uniqueParticipants', type: 'uint256' },
+          { name: 'isOpen', type: 'bool' },
+          { name: 'hasWinner', type: 'bool' },
+          { name: 'winner', type: 'address' },
+          { name: 'winningTicket', type: 'uint256' },
+        ],
+      },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'remainingTickets',
+    stateMutability: 'view',
+    inputs: [{ name: 'lotteryId', type: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'currentPool',
+    stateMutability: 'view',
+    inputs: [{ name: 'lotteryId', type: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'maxPool',
+    stateMutability: 'view',
+    inputs: [{ name: 'lotteryId', type: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'ticketsByUser',
+    stateMutability: 'view',
+    inputs: [
+      { name: '', type: 'uint256' },
+      { name: '', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'getParticipantsPage',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'lotteryId', type: 'uint256' },
+      { name: 'offset', type: 'uint256' },
+      { name: 'limit', type: 'uint256' },
+    ],
+    outputs: [
+      { name: 'wallets', type: 'address[]' },
+      { name: 'ticketCounts', type: 'uint256[]' },
+    ],
+  },
+] as const;

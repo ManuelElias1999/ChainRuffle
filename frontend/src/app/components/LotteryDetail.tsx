@@ -1,52 +1,395 @@
 import { motion } from 'motion/react';
 import { useTranslation } from '../context/TranslationContext';
-import { useWallet } from '../context/WalletContext';
-import { mockLotteries } from '../data/mockData';
-import { useState } from 'react';
-import { ArrowLeft, Share2, QrCode, CheckCircle2, Loader2, Trophy, Users } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  ArrowLeft,
+  Share2,
+  QrCode,
+  Trophy,
+  Users,
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
+  Wallet,
+  Percent,
+} from 'lucide-react';
+import { useAccount } from 'wagmi';
+import { waitForTransactionReceipt } from '@wagmi/core';
+import { wagmiConfig } from '../../config/wagmi';
+import { useLottery } from '../../hooks/useLottery';
+import { useLotteryMetrics } from '../../hooks/useLotteryMetrics';
+import { useLotteryParticipants } from '../../hooks/useLotteryParticipants';
+import { useSwitchToChain } from '../../hooks/useSwitchToChain';
+import { useUSDCApproval } from '../../hooks/useUSDCApproval';
+import { useBuyTickets } from '../../hooks/useBuyTickets';
+import { CHAIN_CONFIG, type SupportedChainKey } from '../../config/chains';
+import { formatAddress, formatUSDC } from '../../lib/formatters';
+import { useCloseLottery } from '../../hooks/useCloseLottery';
+import { getPublicClient } from '../../lib/publicClients';
+import { getRaffleContract } from '../../lib/contracts';
+import {
+  getLotteryTxRegistry,
+  saveBuyTxHash,
+  saveCloseTxHash,
+} from '../../lib/txRegistry';
 
 interface LotteryDetailProps {
   lotteryId: string;
   setCurrentPage: (page: string) => void;
 }
 
-const chainColors = {
-  Base: 'from-blue-500 to-blue-600',
-  Avalanche: 'from-red-500 to-red-600',
-  Arbitrum: 'from-cyan-500 to-cyan-600',
+const chainColors: Record<SupportedChainKey, string> = {
+  base: 'from-blue-500 to-blue-600',
+  avalanche: 'from-red-500 to-red-600',
+  arbitrum: 'from-cyan-500 to-cyan-600',
 };
+
+function parseLotteryParam(value: string): { chainKey: SupportedChainKey; id: bigint } {
+  const parts = value.includes(':') ? value.split(':') : value.split('-');
+
+  if (parts.length === 2 && ['base', 'avalanche', 'arbitrum'].includes(parts[0])) {
+    return {
+      chainKey: parts[0] as SupportedChainKey,
+      id: BigInt(parts[1]),
+    };
+  }
+
+  return {
+    chainKey: 'base',
+    id: BigInt(value),
+  };
+}
+
+type PurchaseStep = 'idle' | 'approving' | 'approved' | 'buying' | 'success' | 'error';
 
 export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps) {
   const { t } = useTranslation();
-  const { isConnected, address } = useWallet();
+  const { address, isConnected, chainId } = useAccount();
+  const { switchToChain, isSwitching } = useSwitchToChain();
+
   const [quantity, setQuantity] = useState(1);
-  const [approvalStatus, setApprovalStatus] = useState<'idle' | 'approving' | 'approved'>('idle');
-  const [buyStatus, setBuyStatus] = useState<'idle' | 'buying' | 'success'>('idle');
   const [showQR, setShowQR] = useState(false);
+  const [purchaseStep, setPurchaseStep] = useState<PurchaseStep>('idle');
+  const [purchaseMessage, setPurchaseMessage] = useState('');
+  const [purchaseError, setPurchaseError] = useState('');
+  const [isClosingFlow, setIsClosingFlow] = useState(false);
+  const [closeMessage, setCloseMessage] = useState('');
 
-  const lottery = mockLotteries.find((l) => l.id === lotteryId);
+  const [createTxHash, setCreateTxHash] = useState<`0x${string}` | null>(null);
+  const [purchaseTxHash, setPurchaseTxHash] = useState<`0x${string}` | null>(null);
+  const [closeTxHash, setCloseTxHash] = useState<`0x${string}` | null>(null);
 
-  if (!lottery) {
-    return <div>Lottery not found</div>;
+  const { chainKey, id } = parseLotteryParam(lotteryId);
+  const { closeLotteryAsync, isClosing, closeError } = useCloseLottery();
+  const chain = CHAIN_CONFIG[chainKey];
+  const isCorrectChain = chainId === chain.chainId;
+
+  const { lottery, isLoading, error, refetch } = useLottery({
+    lotteryId: id,
+    chainKey,
+  });
+
+  const metrics = useLotteryMetrics({
+    lotteryId: id,
+    chainKey,
+  });
+
+  const participants = useLotteryParticipants({
+    lotteryId: id,
+    chainKey,
+    page: 0n,
+    pageSize: 25n,
+  });
+
+  useEffect(() => {
+    const stored = getLotteryTxRegistry(chainKey, id);
+    setCreateTxHash(stored.createTxHash ?? null);
+    setPurchaseTxHash(stored.buyTxHashes?.[0] ?? null);
+    setCloseTxHash(stored.closeTxHash ?? null);
+  }, [chainKey, id]);
+
+  const ticketPrice = lottery?.ticketPrice ?? 0n;
+  const maxTickets = lottery?.maxTickets ?? 0n;
+  const ticketsSold = lottery?.ticketsSold ?? 0n;
+  const remainingTickets = metrics.remainingTickets ?? maxTickets - ticketsSold;
+  const currentPool = metrics.currentPool ?? lottery?.totalRaised ?? 0n;
+
+  const winnerPayout = (currentPool * 80n) / 100n;
+  const creatorPayout = (currentPool * 10n) / 100n;
+  const feesPayout = currentPool - winnerPayout - creatorPayout;
+
+  const quantitySafe = useMemo(() => {
+    const maxAllowed = Number(remainingTickets > 0n ? remainingTickets : 1n);
+    return Math.max(1, Math.min(quantity, maxAllowed));
+  }, [quantity, remainingTickets]);
+
+  const requiredAmount = BigInt(quantitySafe) * ticketPrice;
+
+  const {
+    hasEnoughAllowance,
+    approveAsync,
+    isApproving,
+    approveError,
+    refetchAllowance,
+  } = useUSDCApproval({
+    chainKey,
+    owner: address,
+    requiredAmount,
+  });
+
+  const { buyTicketsAsync, isBuying, buyError } = useBuyTickets();
+
+  const progress =
+    maxTickets > 0n ? Number((ticketsSold * 10000n) / maxTickets) / 100 : 0;
+
+  const isCreator =
+    !!address && !!lottery && lottery.creator.toLowerCase() === address.toLowerCase();
+
+  const isProcessing =
+    purchaseStep === 'approving' ||
+    purchaseStep === 'approved' ||
+    purchaseStep === 'buying' ||
+    isApproving ||
+    isBuying;
+
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const refreshAll = async () => {
+    await Promise.all([
+      refetch(),
+      metrics.refetch(),
+      participants.refetch(),
+      refetchAllowance(),
+    ]);
+  };
+
+  const resetPurchaseState = () => {
+    setPurchaseStep('idle');
+    setPurchaseMessage('');
+    setPurchaseError('');
+  };
+
+  const waitForEnoughAllowance = async () => {
+    for (let i = 0; i < 8; i++) {
+      const result = await refetchAllowance();
+      const value = result.data ?? 0n;
+      if (value >= requiredAmount) return value;
+      await sleep(800);
+    }
+    return 0n;
+  };
+
+  const waitForLotteryStateAfterBuy = async () => {
+    const client = getPublicClient(chainKey);
+    const raffle = getRaffleContract(chainKey);
+
+    const previousTicketsSold = ticketsSold;
+    const previousRemainingTickets = remainingTickets;
+    const previousCurrentPool = currentPool;
+
+    for (let i = 0; i < 12; i++) {
+      const [freshLottery, freshRemaining, freshCurrentPool] = await Promise.all([
+        client.readContract({
+          address: raffle.address,
+          abi: raffle.abi,
+          functionName: 'getLottery',
+          args: [id],
+        }),
+        client.readContract({
+          address: raffle.address,
+          abi: raffle.abi,
+          functionName: 'remainingTickets',
+          args: [id],
+        }),
+        client.readContract({
+          address: raffle.address,
+          abi: raffle.abi,
+          functionName: 'currentPool',
+          args: [id],
+        }),
+      ]);
+
+      const freshIsOpen = Array.isArray(freshLottery) ? freshLottery[8] : freshLottery.isOpen;
+      const freshTicketsSold = Array.isArray(freshLottery) ? freshLottery[5] : freshLottery.ticketsSold;
+
+      const changed =
+        freshTicketsSold !== previousTicketsSold ||
+        freshRemaining !== previousRemainingTickets ||
+        freshCurrentPool !== previousCurrentPool;
+
+      if (changed || !freshIsOpen) {
+        return {
+          isOpen: freshIsOpen,
+          ticketsSold: freshTicketsSold as bigint,
+          remainingTickets: freshRemaining as bigint,
+          currentPool: freshCurrentPool as bigint,
+        };
+      }
+
+      await sleep(1000);
+    }
+
+    return null;
+  };
+
+  const waitForLotteryToClose = async () => {
+    const client = getPublicClient(chainKey);
+    const raffle = getRaffleContract(chainKey);
+
+    for (let i = 0; i < 12; i++) {
+      const freshLottery = await client.readContract({
+        address: raffle.address,
+        abi: raffle.abi,
+        functionName: 'getLottery',
+        args: [id],
+      });
+
+      const openValue = Array.isArray(freshLottery) ? freshLottery[8] : freshLottery.isOpen;
+      if (!openValue) return true;
+      await sleep(1000);
+    }
+
+    return false;
+  };
+
+  const handlePrimaryPurchase = async () => {
+    if (!isConnected || !isCorrectChain || quantitySafe <= 0 || remainingTickets <= 0n) return;
+
+    resetPurchaseState();
+
+    try {
+      const allowanceResult = await refetchAllowance();
+      const freshAllowance = allowanceResult.data ?? 0n;
+      const needsApproval = freshAllowance < requiredAmount;
+
+      if (needsApproval) {
+        setPurchaseStep('approving');
+        setPurchaseMessage('Paso 1/2: Confirma la aprobación de USDC en tu wallet.');
+
+        const approveHash = await approveAsync();
+
+        await waitForTransactionReceipt(wagmiConfig, {
+          hash: approveHash,
+        });
+
+        setPurchaseStep('approved');
+        setPurchaseMessage('USDC aprobado correctamente. Verificando allowance...');
+
+        const refreshedAllowance = await waitForEnoughAllowance();
+
+        if (refreshedAllowance < requiredAmount) {
+          setPurchaseStep('error');
+          setPurchaseError(
+            'El approve salió bien, pero el allowance aún no se reflejó. Intenta de nuevo en unos segundos.'
+          );
+          return;
+        }
+      }
+
+      setPurchaseStep('buying');
+      setPurchaseMessage('Paso 2/2: Confirma la compra de tickets en tu wallet.');
+
+      const buyHash = await buyTicketsAsync({
+        chainKey,
+        lotteryId: id,
+        quantity: quantitySafe,
+      });
+
+      setPurchaseTxHash(buyHash);
+      saveBuyTxHash(chainKey, id, buyHash);
+
+      await waitForTransactionReceipt(wagmiConfig, {
+        hash: buyHash,
+      });
+
+      const finalState = await waitForLotteryStateAfterBuy();
+
+      await refreshAll();
+
+      if (finalState && !finalState.isOpen) {
+        setPurchaseStep('success');
+        setPurchaseMessage(
+          `Ya compraste ${quantitySafe} ticket${quantitySafe > 1 ? 's' : ''}. La lotería se cerró automáticamente.`
+        );
+        return;
+      }
+
+      setPurchaseStep('success');
+      setPurchaseMessage(`Ya compraste ${quantitySafe} ticket${quantitySafe > 1 ? 's' : ''}.`);
+    } catch (err) {
+      console.error(err);
+      await refetchAllowance();
+      setPurchaseStep('error');
+      setPurchaseError(
+        'La compra no se completó. Revisa si cancelaste una firma, si tienes balance suficiente o si la red respondió lento.'
+      );
+    }
+  };
+
+  const handleCloseLottery = async () => {
+    if (!isConnected || !isCorrectChain || !isCreator || !lottery?.isOpen) return;
+
+    try {
+      setIsClosingFlow(true);
+      setCloseMessage('Confirma el cierre de la lotería en tu wallet.');
+
+      const closeHash = await closeLotteryAsync({
+        chainKey,
+        lotteryId: id,
+      });
+
+      setCloseTxHash(closeHash);
+      saveCloseTxHash(chainKey, id, closeHash);
+
+      await waitForTransactionReceipt(wagmiConfig, {
+        hash: closeHash,
+      });
+
+      setCloseMessage('Cierre confirmado en blockchain. Actualizando resultado...');
+
+      const closed = await waitForLotteryToClose();
+
+      await refreshAll();
+
+      if (closed) {
+        setCloseMessage('Lotería cerrada correctamente.');
+      } else {
+        setCloseMessage('El cierre fue confirmado, pero la UI tardó en actualizar. Recarga la vista.');
+      }
+    } catch (err) {
+      console.error(err);
+      setCloseMessage('No se pudo cerrar la lotería.');
+    } finally {
+      setIsClosingFlow(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Cargando lotería...</p>
+      </div>
+    );
   }
 
-  const currentPool = lottery.ticketsSold * lottery.ticketPrice;
-  const maxPool = lottery.maxTickets * lottery.ticketPrice;
-  const progress = (lottery.ticketsSold / lottery.maxTickets) * 100;
-  const estimatedTotal = quantity * lottery.ticketPrice;
-  const isCreator = address === lottery.creator;
+  if (error || !lottery) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <p className="text-xl">No se pudo cargar la lotería</p>
+          <button
+            onClick={() => setCurrentPage('explore')}
+            className="px-4 py-2 rounded-xl bg-primary text-primary-foreground"
+          >
+            Volver al explorador
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-  const handleApprove = async () => {
-    setApprovalStatus('approving');
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setApprovalStatus('approved');
-  };
-
-  const handleBuy = async () => {
-    setBuyStatus('buying');
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setBuyStatus('success');
-  };
+  const showActionPanel = lottery.isOpen;
+  const showResultPanel = !lottery.isOpen;
 
   return (
     <div className="min-h-screen">
@@ -66,139 +409,174 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
             <motion.div
               initial={{ y: 30, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              className="relative group"
+              className="relative"
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-accent/20 rounded-3xl blur-xl" />
-              <div className="relative backdrop-blur-xl bg-card border border-border rounded-3xl p-8">
-                <div className="flex items-start justify-between mb-6">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-accent/10 rounded-3xl blur-md" />
+              <div className="relative backdrop-blur-md bg-card border border-border rounded-3xl p-8">
+                <div className="flex items-start justify-between mb-6 gap-4">
                   <div>
-                    <h1 className="text-4xl mb-2" style={{ fontWeight: 700 }}>
-                      {lottery.name}
-                    </h1>
+                    <div className="flex items-center gap-3 mb-2 flex-wrap">
+                      <h1 className="text-4xl font-bold">{lottery.name}</h1>
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs text-white bg-gradient-to-r ${chainColors[chainKey]}`}
+                      >
+                        {chain.name}
+                      </span>
+                      {!lottery.isOpen && (
+                        <span className="px-3 py-1 rounded-full text-xs bg-primary/10 text-primary">
+                          {lottery.hasWinner ? 'Finalizada con ganador' : 'Finalizada sin ganador'}
+                        </span>
+                      )}
+                    </div>
+
                     <p className="text-muted-foreground">
-                      {t('lottery.id')}: {lottery.id}
+                      {t('lottery.id')}: {lottery.id.toString()}
                     </p>
-                  </div>
-                  <div className={`px-4 py-2 rounded-xl bg-gradient-to-r ${chainColors[lottery.blockchain]} text-white`}>
-                    {lottery.blockchain}
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Creador: {formatAddress(lottery.creator)}
+                    </p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                   <div className="p-4 rounded-xl bg-muted/50">
                     <div className="text-sm text-muted-foreground mb-1">{t('lottery.price')}</div>
-                    <div className="text-2xl" style={{ fontWeight: 700 }}>
-                      ${lottery.ticketPrice}
-                    </div>
+                    <div className="text-2xl font-bold">{formatUSDC(ticketPrice)} USDC</div>
                   </div>
+
                   <div className="p-4 rounded-xl bg-muted/50">
                     <div className="text-sm text-muted-foreground mb-1">{t('lottery.sold')}</div>
-                    <div className="text-2xl" style={{ fontWeight: 700 }}>
-                      {lottery.ticketsSold}
-                    </div>
+                    <div className="text-2xl font-bold">{ticketsSold.toString()}</div>
                   </div>
+
                   <div className="p-4 rounded-xl bg-muted/50">
                     <div className="text-sm text-muted-foreground mb-1">{t('lottery.remaining')}</div>
-                    <div className="text-2xl" style={{ fontWeight: 700 }}>
-                      {lottery.maxTickets - lottery.ticketsSold}
-                    </div>
+                    <div className="text-2xl font-bold">{remainingTickets.toString()}</div>
                   </div>
+
                   <div className="p-4 rounded-xl bg-muted/50">
                     <div className="text-sm text-muted-foreground mb-1">{t('lottery.pool')}</div>
-                    <div className="text-2xl" style={{ fontWeight: 700 }}>
-                      ${currentPool}
-                    </div>
+                    <div className="text-2xl font-bold">{formatUSDC(currentPool)} USDC</div>
                   </div>
                 </div>
 
                 <div className="mb-6">
                   <div className="flex justify-between text-sm mb-2">
                     <span className="text-muted-foreground">Progreso</span>
-                    <span style={{ fontWeight: 600 }}>{progress.toFixed(1)}%</span>
+                    <span className="font-semibold">{progress.toFixed(1)}%</span>
                   </div>
                   <div className="h-3 bg-muted rounded-full overflow-hidden">
                     <motion.div
                       initial={{ width: 0 }}
                       animate={{ width: `${progress}%` }}
-                      transition={{ duration: 1 }}
+                      transition={{ duration: 0.6 }}
                       className="h-full bg-gradient-to-r from-primary via-accent to-emerald-500"
                     />
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 transition-all">
                     <Share2 className="w-4 h-4" />
                     {t('detail.share')}
                   </button>
-                  {lottery.status === 'closed' && lottery.winner && (
+
+                  {createTxHash && (
+                    <a
+                      href={`${chain.explorerUrl}/tx/${createTxHash}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 transition-all text-sm"
+                    >
+                      Ver creación en explorer
+                    </a>
+                  )}
+
+                  {lottery.hasWinner && (
                     <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 text-primary">
                       <Trophy className="w-4 h-4" />
-                      {t('detail.winner')}: {lottery.winner}
+                      Ganador: {formatAddress(lottery.winner)}
                     </div>
                   )}
-                  {lottery.status === 'closed' && !lottery.winner && (
+
+                  {!lottery.isOpen && !lottery.hasWinner && (
                     <div className="px-4 py-2 rounded-xl bg-muted text-muted-foreground">
-                      {t('detail.noWinner')}
+                      Cerrada sin ganador
                     </div>
                   )}
                 </div>
               </div>
             </motion.div>
 
-            <motion.div
-              initial={{ y: 30, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.1 }}
-              className="relative"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-accent/10 rounded-2xl blur-xl" />
-              <div className="relative backdrop-blur-xl bg-card border border-border rounded-2xl p-6">
-                <h3 className="text-xl mb-4 flex items-center gap-2" style={{ fontWeight: 600 }}>
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-accent/10 rounded-2xl blur-md" />
+              <div className="relative backdrop-blur-md bg-card border border-border rounded-2xl p-6">
+                <h3 className="text-xl mb-4 flex items-center gap-2 font-semibold">
                   <Users className="w-5 h-5" />
                   {t('detail.transparency')}
                 </h3>
+
                 <div className="space-y-3">
-                  {lottery.participants.map((participant, i) => (
-                    <div key={i} className="flex justify-between items-center p-3 rounded-xl bg-muted/50">
-                      <span className="font-mono text-sm">{participant.address}</span>
-                      <span className="text-sm" style={{ fontWeight: 600 }}>
-                        {participant.tickets} {t('detail.tickets')}
+                  {participants.wallets.length === 0 && (
+                    <p className="text-sm text-muted-foreground">Todavía no hay participantes.</p>
+                  )}
+
+                  {participants.wallets.map((wallet, i) => (
+                    <div key={wallet} className="flex justify-between items-center p-3 rounded-xl bg-muted/50">
+                      <span className="font-mono text-sm">{formatAddress(wallet)}</span>
+                      <span className="text-sm font-semibold">
+                        {participants.ticketCounts[i]?.toString() ?? '0'} tickets
                       </span>
                     </div>
                   ))}
                 </div>
               </div>
-            </motion.div>
+            </div>
           </div>
 
-          {lottery.status === 'open' && (
-            <motion.div
-              initial={{ y: 30, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.2 }}
-              className="relative"
-            >
+          {showActionPanel && (
+            <div className="relative">
               <div className="sticky top-24">
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-accent/20 rounded-2xl blur-xl" />
-                <div className="relative backdrop-blur-xl bg-card border border-border rounded-2xl p-6">
-                  <h3 className="text-xl mb-6" style={{ fontWeight: 600 }}>
-                    {t('detail.purchase')}
-                  </h3>
+                <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-accent/10 rounded-2xl blur-md" />
+                <div className="relative backdrop-blur-md bg-card border border-border rounded-2xl p-6">
+                  <h3 className="text-xl mb-6 font-semibold">{t('detail.purchase')}</h3>
 
                   {!isConnected ? (
                     <div className="text-center py-12">
-                      <p className="text-muted-foreground mb-4">Conecta tu wallet para comprar tickets</p>
+                      <p className="text-muted-foreground mb-4">
+                        Conecta tu wallet para comprar tickets
+                      </p>
                     </div>
                   ) : (
                     <div className="space-y-6">
                       <div>
-                        <label className="text-sm text-muted-foreground mb-2 block">{t('detail.quantity')}</label>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-sm text-muted-foreground block">
+                            {t('detail.quantity')}
+                          </label>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setQuantity(Number(remainingTickets > 0n ? remainingTickets : 1n));
+                              resetPurchaseState();
+                            }}
+                            className="text-sm px-3 py-1 rounded-lg border border-border hover:bg-muted transition-all"
+                          >
+                            Max
+                          </button>
+                        </div>
+
                         <input
                           type="number"
                           min="1"
-                          value={quantity}
-                          onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                          max={Number(remainingTickets)}
+                          value={quantitySafe}
+                          onChange={(e) => {
+                            const next = Math.max(1, Number(e.target.value) || 1);
+                            setQuantity(next);
+                            resetPurchaseState();
+                          }}
                           className="w-full px-4 py-3 rounded-xl bg-input-background border border-border focus:outline-none focus:ring-2 focus:ring-primary/50"
                         />
                       </div>
@@ -206,45 +584,99 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
                       <div className="p-4 rounded-xl bg-muted/50">
                         <div className="flex justify-between mb-2">
                           <span className="text-muted-foreground">{t('lottery.price')}</span>
-                          <span>${lottery.ticketPrice} USDC</span>
+                          <span>{formatUSDC(ticketPrice)} USDC</span>
                         </div>
-                        <div className="flex justify-between text-lg" style={{ fontWeight: 600 }}>
+                        <div className="flex justify-between text-lg font-semibold">
                           <span>{t('detail.total')}</span>
-                          <span className="text-primary">${estimatedTotal} USDC</span>
+                          <span className="text-primary">{formatUSDC(requiredAmount)} USDC</span>
                         </div>
                       </div>
 
-                      <div className="space-y-3">
-                        <div className="p-4 rounded-xl border-2 border-dashed border-border">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm" style={{ fontWeight: 600 }}>
-                              {t('detail.step1')}
-                            </span>
-                            {approvalStatus === 'approved' && <CheckCircle2 className="w-5 h-5 text-primary" />}
+                      {!isCorrectChain && (
+                        <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 space-y-3">
+                          <div className="flex gap-2">
+                            <AlertTriangle className="w-5 h-5 text-yellow-500" />
+                            <div>
+                              <p className="font-semibold">Red incorrecta</p>
+                              <p className="text-sm text-muted-foreground">
+                                Puedes ver esta lotería desde cualquier red, pero para comprar o cerrar debes cambiar a {chain.name}.
+                              </p>
+                            </div>
                           </div>
+
                           <button
-                            onClick={handleApprove}
-                            disabled={approvalStatus !== 'idle'}
-                            className="w-full px-4 py-3 rounded-xl bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            onClick={() => switchToChain(chainKey)}
+                            disabled={isSwitching}
+                            className="w-full px-4 py-3 rounded-xl bg-primary text-primary-foreground disabled:opacity-50"
                           >
-                            {approvalStatus === 'approving' && <Loader2 className="w-4 h-4 animate-spin" />}
-                            {approvalStatus === 'idle' && t('detail.approve')}
-                            {approvalStatus === 'approving' && t('detail.approving')}
-                            {approvalStatus === 'approved' && t('detail.approved')}
+                            {isSwitching ? 'Cambiando red...' : `Cambiar a ${chain.name}`}
                           </button>
                         </div>
+                      )}
 
-                        <button
-                          onClick={handleBuy}
-                          disabled={approvalStatus !== 'approved' || buyStatus !== 'idle'}
-                          className="w-full px-4 py-3 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                        >
-                          {buyStatus === 'buying' && <Loader2 className="w-4 h-4 animate-spin" />}
-                          {buyStatus === 'idle' && t('detail.buy')}
-                          {buyStatus === 'buying' && t('detail.buying')}
-                          {buyStatus === 'success' && t('detail.success')}
-                        </button>
+                      <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-semibold">Flujo de compra</span>
+                          {(purchaseStep === 'approved' || purchaseStep === 'buying' || purchaseStep === 'success') && (
+                            <CheckCircle2 className="w-5 h-5 text-primary" />
+                          )}
+                        </div>
+
+                        <div className="text-sm text-muted-foreground">
+                          {purchaseStep === 'idle' && !hasEnoughAllowance && (
+                            <p>Con un solo click iniciaremos approve y luego la compra automáticamente.</p>
+                          )}
+                          {purchaseStep === 'idle' && hasEnoughAllowance && (
+                            <p>Ya tienes aprobación suficiente. Iremos directo a la compra.</p>
+                          )}
+                          {purchaseStep === 'approving' && (
+                            <p>Paso 1/2: Confirma la aprobación de USDC en tu wallet.</p>
+                          )}
+                          {purchaseStep === 'approved' && (
+                            <p>USDC aprobado correctamente. Preparando compra...</p>
+                          )}
+                          {purchaseStep === 'buying' && (
+                            <p>Paso 2/2: Confirma la compra de tickets en tu wallet.</p>
+                          )}
+                          {purchaseStep === 'success' && <p>{purchaseMessage}</p>}
+                          {purchaseStep === 'error' && <p className="text-red-500">{purchaseError}</p>}
+                        </div>
                       </div>
+
+                      <button
+                        onClick={handlePrimaryPurchase}
+                        disabled={!isCorrectChain || isProcessing || remainingTickets <= 0n}
+                        className="w-full px-4 py-3 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <span className="flex items-center justify-center gap-2 whitespace-nowrap">
+                          {isProcessing && <Loader2 className="w-5 h-5 shrink-0 animate-spin" />}
+                          <span className="inline-flex items-center leading-none font-medium">
+                            {purchaseStep === 'idle' && 'Comprar tickets'}
+                            {purchaseStep === 'approving' && 'Paso 1/2: Aprobando USDC...'}
+                            {purchaseStep === 'approved' && 'Preparando compra...'}
+                            {purchaseStep === 'buying' && 'Paso 2/2: Comprando tickets...'}
+                            {purchaseStep === 'success' && 'Comprar de nuevo'}
+                            {purchaseStep === 'error' && 'Intentar de nuevo'}
+                          </span>
+                        </span>
+                      </button>
+
+                      {purchaseTxHash && (
+                        <a
+                          href={`${chain.explorerUrl}/tx/${purchaseTxHash}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block text-sm text-primary underline break-all"
+                        >
+                          Ver compra en el explorer
+                        </a>
+                      )}
+
+                      {(approveError || buyError) && purchaseStep !== 'error' && (
+                        <p className="text-sm text-red-500">
+                          La transacción no se completó. Revisa la wallet, allowance o balance.
+                        </p>
+                      )}
 
                       <button
                         onClick={() => setShowQR(!showQR)}
@@ -260,21 +692,143 @@ export function LotteryDetail({ lotteryId, setCurrentPage }: LotteryDetailProps)
                             <QrCode className="w-24 h-24 text-gray-300" />
                           </div>
                           <p className="text-sm text-muted-foreground">
-                            {t('detail.qr.step1')} → {t('detail.qr.step2')}
+                            Paso 1: Aprobar USDC → Paso 2: Escanear y comprar
                           </p>
                         </div>
                       )}
 
                       {isCreator && (
-                        <button className="w-full px-4 py-3 rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all">
-                          {t('detail.close')}
-                        </button>
+                        <div className="space-y-3">
+                          <button
+                            onClick={handleCloseLottery}
+                            disabled={!isCorrectChain || isClosingFlow || isClosing}
+                            className="w-full px-4 py-3 rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                          >
+                            {(isClosingFlow || isClosing) && <Loader2 className="w-4 h-4 animate-spin" />}
+                            {isClosingFlow || isClosing ? 'Cerrando lotería...' : t('detail.close')}
+                          </button>
+
+                          {closeMessage && (
+                            <p className="text-sm text-muted-foreground">{closeMessage}</p>
+                          )}
+
+                          {closeTxHash && (
+                            <a
+                              href={`${chain.explorerUrl}/tx/${closeTxHash}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block text-sm text-primary underline break-all"
+                            >
+                              Ver cierre en el explorer
+                            </a>
+                          )}
+
+                          {closeError && (
+                            <p className="text-sm text-red-500">
+                              Error cerrando la lotería.
+                            </p>
+                          )}
+                        </div>
                       )}
                     </div>
                   )}
                 </div>
               </div>
-            </motion.div>
+            </div>
+          )}
+
+          {showResultPanel && (
+            <div className="relative">
+              <div className="sticky top-24">
+                <div className="relative backdrop-blur-md bg-card border border-border rounded-2xl p-6 space-y-6">
+                  <div>
+                    <h3 className="text-2xl font-semibold mb-2">Resultado</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {lottery.hasWinner ? 'Lotería finalizada con ganador' : 'Lotería finalizada sin ganador'}
+                    </p>
+                  </div>
+
+                  {lottery.hasWinner ? (
+                    <>
+                      <div className="p-4 rounded-xl bg-primary/10 border border-primary/20">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Trophy className="w-5 h-5 text-primary" />
+                          <span className="font-semibold">Ganador</span>
+                        </div>
+                        <p className="font-mono break-all mb-2">{lottery.winner}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Ticket ganador: {lottery.winningTicket.toString()}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3">
+                        <div className="p-4 rounded-xl bg-muted/50">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                            <Wallet className="w-4 h-4" />
+                            Premio del ganador
+                          </div>
+                          <div className="text-2xl font-bold text-primary">
+                            {formatUSDC(winnerPayout)} USDC
+                          </div>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-muted/50">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                            <Users className="w-4 h-4" />
+                            Ganancia del creador
+                          </div>
+                          <div className="text-xl font-bold">
+                            {formatUSDC(creatorPayout)} USDC
+                          </div>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-muted/50">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                            <Percent className="w-4 h-4" />
+                            Fees distribuidos
+                          </div>
+                          <div className="text-xl font-bold">
+                            {formatUSDC(feesPayout)} USDC
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="p-4 rounded-xl bg-muted/50">
+                      <p className="text-muted-foreground">
+                        Esta lotería cerró sin ganador. No hubo tickets válidos para el sorteo final.
+                      </p>
+                    </div>
+                  )}
+
+                  {createTxHash && (
+                    <a
+                      href={`${chain.explorerUrl}/tx/${createTxHash}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block text-sm text-primary underline break-all"
+                    >
+                      Ver creación en explorer
+                    </a>
+                  )}
+
+                  {closeTxHash && (
+                    <a
+                      href={`${chain.explorerUrl}/tx/${closeTxHash}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block text-sm text-primary underline break-all"
+                    >
+                      Ver cierre en el explorer
+                    </a>
+                  )}
+
+                  {closeMessage && (
+                    <p className="text-sm text-muted-foreground">{closeMessage}</p>
+                  )}
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>

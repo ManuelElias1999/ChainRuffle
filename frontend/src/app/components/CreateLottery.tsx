@@ -1,37 +1,78 @@
 import { motion } from 'motion/react';
 import { useTranslation } from '../context/TranslationContext';
-import { useWallet } from '../context/WalletContext';
 import { useState } from 'react';
-import { ArrowLeft, Loader2, Sparkles } from 'lucide-react';
-import { Blockchain } from '../types/lottery';
+import { ArrowLeft, Loader2, Sparkles, AlertTriangle } from 'lucide-react';
+import { useWallet } from '../../hooks/uswWallet';
+import { useCreateLottery } from '../../hooks/useCreateLottery';
+import { useSwitchToChain } from '../../hooks/useSwitchToChain';
+import { SUPPORTED_CHAINS, CHAIN_CONFIG, type SupportedChainKey } from '../../config/chains';
+import { saveCreateTxHash } from '../../lib/txRegistry';
+import { useAccount } from 'wagmi';
 
 interface CreateLotteryProps {
   setCurrentPage: (page: string) => void;
+  setSelectedLottery?: (id: string) => void;
 }
 
-const chainColors = {
-  Base: 'from-blue-500 to-blue-600',
-  Avalanche: 'from-red-500 to-red-600',
-  Arbitrum: 'from-cyan-500 to-cyan-600',
+const chainColors: Record<SupportedChainKey, string> = {
+  base: 'from-blue-500 to-blue-600',
+  avalanche: 'from-red-500 to-red-600',
+  arbitrum: 'from-cyan-500 to-cyan-600',
 };
 
-export function CreateLottery({ setCurrentPage }: CreateLotteryProps) {
+export function CreateLottery({ setCurrentPage, setSelectedLottery }: CreateLotteryProps) {
   const { t } = useTranslation();
-  const { isConnected } = useWallet();
+  const { isConnected, currentChain } = useWallet();
+  const { createLottery, isCreating, createError } = useCreateLottery();
+  const { switchToChain, isSwitching } = useSwitchToChain();
+  const { address } = useAccount();
+
   const [name, setName] = useState('');
-  const [blockchain, setBlockchain] = useState<Blockchain>('Base');
-  const [ticketPrice, setTicketPrice] = useState(10);
-  const [maxTickets, setMaxTickets] = useState(100);
-  const [isCreating, setIsCreating] = useState(false);
+  const [selectedChain, setSelectedChain] = useState<SupportedChainKey>('base');
+  const [ticketPrice, setTicketPrice] = useState('10');
+  const [maxTickets, setMaxTickets] = useState('100');
+  const [createTxHash, setCreateTxHash] = useState<`0x${string}` | null>(null);
 
-  const estimatedMaxPool = ticketPrice * maxTickets;
+  const selectedChainConfig = CHAIN_CONFIG[selectedChain];
+  const isCorrectChain = currentChain?.key === selectedChain;
 
-  const handleCreate = async () => {
-    setIsCreating(true);
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setIsCreating(false);
-    setCurrentPage('explore');
-  };
+  const numericTicketPrice = Number(ticketPrice || 0);
+  const numericMaxTickets = Number(maxTickets || 0);
+  const estimatedMaxPool = numericTicketPrice * numericMaxTickets;
+
+  const canCreate =
+    name.trim().length > 0 &&
+    numericTicketPrice > 0 &&
+    numericMaxTickets > 0 &&
+    isConnected &&
+    isCorrectChain &&
+    !isCreating;
+
+    const handleCreate = async () => {
+      if (!canCreate || !address) return;
+    
+      try {
+        const result = await createLottery({
+          chainKey: selectedChain,
+          creator: address,
+          name: name.trim(),
+          ticketPrice,
+          maxTickets,
+        });
+    
+        setCreateTxHash(result.hash);
+        saveCreateTxHash(selectedChain, result.lotteryId, result.hash);
+    
+        if (setSelectedLottery) {
+          setSelectedLottery(`${selectedChain}:${result.lotteryId.toString()}`);
+          return;
+        }
+    
+        setCurrentPage('explore');
+      } catch (err) {
+        console.error('Error creating lottery:', err);
+      }
+    };
 
   return (
     <div className="min-h-screen">
@@ -56,8 +97,10 @@ export function CreateLottery({ setCurrentPage }: CreateLotteryProps) {
         </motion.h1>
 
         {!isConnected ? (
-          <div className="text-center py-20">
-            <p className="text-xl text-muted-foreground">Conecta tu wallet para crear una lotería</p>
+          <div className="text-center py-20 rounded-2xl border border-border bg-card">
+            <p className="text-xl text-muted-foreground">
+              Conecta tu wallet para crear una lotería
+            </p>
           </div>
         ) : (
           <div className="grid lg:grid-cols-3 gap-8">
@@ -85,29 +128,54 @@ export function CreateLottery({ setCurrentPage }: CreateLotteryProps) {
 
                     <div>
                       <label className="block text-sm mb-3" style={{ fontWeight: 600 }}>
-                        {t('create.blockchain')}
+                        Blockchain
                       </label>
+
                       <div className="grid grid-cols-3 gap-3">
-                        {(['Base', 'Avalanche', 'Arbitrum'] as Blockchain[]).map((chain) => (
+                        {SUPPORTED_CHAINS.map((chain) => (
                           <button
-                            key={chain}
-                            onClick={() => setBlockchain(chain)}
+                            key={chain.key}
+                            type="button"
+                            onClick={() => setSelectedChain(chain.key)}
                             className={`p-4 rounded-xl border-2 transition-all ${
-                              blockchain === chain
+                              selectedChain === chain.key
                                 ? 'border-primary bg-primary/10'
                                 : 'border-border hover:border-primary/50'
                             }`}
                           >
                             <div
-                              className={`w-8 h-8 rounded-lg bg-gradient-to-br ${chainColors[chain]} mx-auto mb-2`}
+                              className={`w-8 h-8 rounded-lg bg-gradient-to-br ${
+                                chainColors[chain.key]
+                              } mx-auto mb-2`}
                             />
                             <div className="text-sm" style={{ fontWeight: 600 }}>
-                              {chain}
+                              {chain.name}
                             </div>
                           </button>
                         ))}
                       </div>
                     </div>
+
+                    {!isCorrectChain && (
+                      <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-yellow-500 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="font-semibold">Red incorrecta</p>
+                          <p className="text-sm text-muted-foreground mb-3">
+                            Estás conectado a {currentChain?.name ?? 'una red no soportada'}.
+                            Cambia a {selectedChainConfig.name} para crear esta lotería.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => switchToChain(selectedChain)}
+                            disabled={isSwitching}
+                            className="px-4 py-2 rounded-xl bg-primary text-primary-foreground disabled:opacity-50"
+                          >
+                            {isSwitching ? 'Cambiando red...' : `Cambiar a ${selectedChainConfig.name}`}
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="grid md:grid-cols-2 gap-6">
                       <div>
@@ -117,9 +185,10 @@ export function CreateLottery({ setCurrentPage }: CreateLotteryProps) {
                         <div className="relative">
                           <input
                             type="number"
-                            min="1"
+                            min="0.01"
+                            step="0.01"
                             value={ticketPrice}
-                            onChange={(e) => setTicketPrice(Math.max(1, parseInt(e.target.value) || 1))}
+                            onChange={(e) => setTicketPrice(e.target.value)}
                             className="w-full px-4 py-3 pr-16 rounded-xl bg-input-background border border-border focus:outline-none focus:ring-2 focus:ring-primary/50"
                           />
                           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
@@ -135,8 +204,9 @@ export function CreateLottery({ setCurrentPage }: CreateLotteryProps) {
                         <input
                           type="number"
                           min="1"
+                          step="1"
                           value={maxTickets}
-                          onChange={(e) => setMaxTickets(Math.max(1, parseInt(e.target.value) || 1))}
+                          onChange={(e) => setMaxTickets(e.target.value)}
                           className="w-full px-4 py-3 rounded-xl bg-input-background border border-border focus:outline-none focus:ring-2 focus:ring-primary/50"
                         />
                       </div>
@@ -164,42 +234,62 @@ export function CreateLottery({ setCurrentPage }: CreateLotteryProps) {
                     <div>
                       <div className="text-sm text-muted-foreground mb-1">{t('create.chain')}</div>
                       <div
-                        className={`inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gradient-to-r ${chainColors[blockchain]} text-white text-sm`}
+                        className={`inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gradient-to-r ${
+                          chainColors[selectedChain]
+                        } text-white text-sm`}
                       >
-                        {blockchain}
+                        {selectedChainConfig.name}
                       </div>
                     </div>
 
                     <div>
                       <div className="text-sm text-muted-foreground mb-1">{t('lottery.price')}</div>
                       <div className="text-2xl" style={{ fontWeight: 700 }}>
-                        ${ticketPrice} USDC
+                        ${ticketPrice || '0'} USDC
                       </div>
                     </div>
 
                     <div>
                       <div className="text-sm text-muted-foreground mb-1">{t('create.maxTickets')}</div>
                       <div className="text-2xl" style={{ fontWeight: 700 }}>
-                        {maxTickets}
+                        {maxTickets || '0'}
                       </div>
                     </div>
 
                     <div className="pt-4 border-t border-border">
                       <div className="text-sm text-muted-foreground mb-1">{t('create.estimatedMax')}</div>
                       <div className="text-3xl text-primary" style={{ fontWeight: 800 }}>
-                        ${estimatedMaxPool} USDC
+                        ${Number.isFinite(estimatedMaxPool) ? estimatedMaxPool.toLocaleString() : '0'} USDC
                       </div>
                     </div>
                   </div>
 
                   <button
+                    type="button"
                     onClick={handleCreate}
-                    disabled={!name || isCreating}
+                    disabled={!canCreate}
                     className="w-full px-4 py-3 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     {isCreating && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {isCreating ? t('create.creating') : t('create.submit')}
+                    {isCreating ? 'Creando...' : t('create.submit')}
                   </button>
+
+                  {createTxHash && (
+                    <a
+                      href={`${CHAIN_CONFIG[selectedChain].explorerUrl}/tx/${createTxHash}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-4 block text-sm text-primary underline break-all"
+                    >
+                      Ver transacción de creación
+                    </a>
+                  )}
+
+                  {createError && (
+                    <p className="mt-4 text-sm text-red-500">
+                      Error creando lotería. Revisa la wallet, la red o los datos.
+                    </p>
+                  )}
 
                   <div className="mt-6 p-4 rounded-xl bg-muted/50">
                     <div className="text-xs text-muted-foreground space-y-1">

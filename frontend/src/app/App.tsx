@@ -39,7 +39,7 @@ export default function App() {
     <TranslationProvider>
       <WalletProvider>
         <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
-          <BackgroundGlow />
+          {/* <BackgroundGlow /> */}
           <Header
             theme={theme}
             toggleTheme={toggleTheme}
@@ -59,7 +59,12 @@ export default function App() {
             <LotteryDetail lotteryId={selectedLottery} setCurrentPage={handlePageChange} />
           )}
 
-          {currentPage === 'create' && <CreateLottery setCurrentPage={handlePageChange} />}
+          {currentPage === 'create' && (
+            <CreateLottery
+              setCurrentPage={handlePageChange}
+              setSelectedLottery={handleLotterySelect}
+            />
+          )}
 
           {currentPage === 'dashboard' && (
             <Dashboard setCurrentPage={handlePageChange} setSelectedLottery={handleLotterySelect} />
