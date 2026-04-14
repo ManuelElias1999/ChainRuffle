@@ -1,6 +1,6 @@
 import { http, createConfig } from 'wagmi';
 import { baseSepolia, avalancheFuji, arbitrumSepolia } from 'wagmi/chains';
-import { injected, walletConnect } from 'wagmi/connectors';
+import { injected, metaMask, walletConnect } from 'wagmi/connectors';
 
 const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;
 
@@ -16,6 +16,13 @@ export const wagmiConfig = createConfig({
         description: 'Multichain raffles with USDC',
         url: window.location.origin,
         icons: [`${window.location.origin}/favicon.ico`],
+      },
+    }),
+    metaMask({
+      dapp: {
+        name: 'ChainRaffle',
+        url: window.location.origin,
+        iconUrl: `${window.location.origin}/favicon.ico`,
       },
     }),
   ],

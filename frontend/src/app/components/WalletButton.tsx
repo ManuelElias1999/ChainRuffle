@@ -10,7 +10,12 @@ export function WalletButton() {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const { address, isConnected, currentChain } = useWallet();
-  const { connect, connectors, isPending } = useConnect();
+  const {
+    connect,
+    connectors,
+    isPending,
+    error: connectError,
+  } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchToChain, isSwitching } = useSwitchToChain();
 
@@ -38,6 +43,16 @@ export function WalletButton() {
     setIsOpen(false);
   };
 
+  const getConnectorLabel = (name: string) => {
+    const lower = name.toLowerCase();
+
+    if (lower.includes('metamask')) return 'MetaMask';
+    if (lower.includes('walletconnect')) return 'WalletConnect';
+    if (lower.includes('injected')) return 'Browser wallet';
+
+    return name;
+  };
+
   if (!isConnected || !address) {
     return (
       <div ref={containerRef} className="relative w-full sm:w-auto">
@@ -60,14 +75,19 @@ export function WalletButton() {
                 key={connector.uid}
                 onClick={() => {
                   connect({ connector });
-                  setIsOpen(false);
                 }}
                 disabled={isPending}
                 className="w-full rounded-xl px-4 py-3 text-left border border-border hover:bg-muted transition disabled:opacity-50"
               >
-                {connector.name}
+                {getConnectorLabel(connector.name)}
               </button>
             ))}
+
+            {connectError && (
+              <p className="text-sm text-red-500 break-words">
+                {connectError.message}
+              </p>
+            )}
           </div>
         )}
       </div>
