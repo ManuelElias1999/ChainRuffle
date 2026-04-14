@@ -41,12 +41,16 @@ function getMaxPoolNumber(lottery: Lottery) {
 
 export function HomePage({ setCurrentPage, setSelectedLottery }: HomePageProps) {
   const { t } = useTranslation();
-  const { lotteries, openLotteries, isLoading, hasError, errors, refetch } = useAllLotteries();
+  const { openLotteries, isLoading, hasError, refetch } = useAllLotteries();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedChain, setSelectedChain] = useState<SupportedChainKey | 'all'>('all');
   const [sortBy, setSortBy] = useState('highestPool');
   const [stableOpenLotteries, setStableOpenLotteries] = useState<Lottery[]>([]);
+
+  useEffect(() => {
+    setStableOpenLotteries(openLotteries);
+  }, [openLotteries]);
 
   const filteredLotteries = stableOpenLotteries
     .filter((lottery) => {
@@ -82,15 +86,6 @@ export function HomePage({ setCurrentPage, setSelectedLottery }: HomePageProps) 
           return 0;
       }
     });
-  
-  useEffect(() => {
-    if (openLotteries.length === 0) return;
-  
-    // evita flicker si llega lista parcial
-    if (openLotteries.length < stableOpenLotteries.length) return;
-  
-    setStableOpenLotteries(openLotteries);
-  }, [openLotteries]);
 
   const totalPool = stableOpenLotteries.reduce((acc, lottery) => acc + lottery.totalRaised, 0n);
 
@@ -167,15 +162,15 @@ export function HomePage({ setCurrentPage, setSelectedLottery }: HomePageProps) 
 
   return (
     <div className="min-h-screen">
-      <section className="relative min-h-[70vh] flex items-center justify-center overflow-hidden">
-        <div className="relative z-10 max-w-4xl mx-auto px-6 text-center py-20">
+      <section className="relative overflow-hidden">
+        <div className="relative z-10 max-w-[1400px] mx-auto px-4 sm:px-6 py-14 sm:py-20 text-center">
           <motion.div
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.6 }}
           >
             <h1
-              className="text-4xl md:text-5xl lg:text-6xl mb-6 bg-gradient-to-r from-emerald-400 via-green-300 to-teal-400 bg-clip-text text-transparent leading-tight"
+              className="text-4xl sm:text-5xl lg:text-6xl mb-6 bg-gradient-to-r from-emerald-400 via-green-300 to-teal-400 bg-clip-text text-transparent leading-tight"
               style={{ fontWeight: 700, letterSpacing: '-0.02em' }}
             >
               {t('home.hero.title')}
@@ -186,7 +181,7 @@ export function HomePage({ setCurrentPage, setSelectedLottery }: HomePageProps) 
             initial={{ y: 15, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.15 }}
-            className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto"
+            className="text-base sm:text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto"
           >
             {t('home.hero.subtitle')}
           </motion.p>
@@ -195,21 +190,21 @@ export function HomePage({ setCurrentPage, setSelectedLottery }: HomePageProps) 
             initial={{ y: 15, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.3 }}
-            className="flex flex-wrap gap-3 justify-center mb-12"
+            className="flex flex-col sm:flex-row gap-3 justify-center mb-10"
           >
             <button
               onClick={() => {
                 const exploreSection = document.getElementById('explore');
                 exploreSection?.scrollIntoView({ behavior: 'smooth' });
               }}
-              className="px-7 py-3 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
+              className="w-full sm:w-auto px-7 py-3 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
             >
               {t('home.hero.explore')}
             </button>
 
             <button
               onClick={() => setCurrentPage('create')}
-              className="px-7 py-3 rounded-xl bg-background border border-primary/30 text-primary hover:bg-primary/5 transition-all"
+              className="w-full sm:w-auto px-7 py-3 rounded-xl bg-background border border-primary/30 text-primary hover:bg-primary/5 transition-all"
             >
               {t('home.hero.create')}
             </button>
@@ -234,8 +229,8 @@ export function HomePage({ setCurrentPage, setSelectedLottery }: HomePageProps) 
         </div>
       </section>
 
-      <section className="max-w-[1400px] mx-auto px-6 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-20">
+      <section className="max-w-[1400px] mx-auto px-4 sm:px-6 py-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6 mb-16">
           {stats.map((stat, i) => (
             <motion.div
               key={i}
@@ -246,13 +241,13 @@ export function HomePage({ setCurrentPage, setSelectedLottery }: HomePageProps) 
               className="relative group"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-accent/10 rounded-2xl blur-md" />
-              <div className="relative backdrop-blur-md bg-card border border-border rounded-2xl p-6">
+              <div className="relative backdrop-blur-md bg-card border border-border rounded-2xl p-5 sm:p-6">
                 <div
                   className={`w-12 h-12 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center mb-4`}
                 >
                   <stat.icon className="w-6 h-6 text-white" />
                 </div>
-                <div className="text-4xl mb-2" style={{ fontWeight: 700 }}>
+                <div className="text-3xl sm:text-4xl mb-2" style={{ fontWeight: 700 }}>
                   {stat.value}
                 </div>
                 <div className="text-sm text-muted-foreground">{stat.label}</div>
@@ -262,74 +257,9 @@ export function HomePage({ setCurrentPage, setSelectedLottery }: HomePageProps) 
         </div>
       </section>
 
-      <section className="max-w-[1400px] mx-auto px-6 py-16">
-        <motion.h2
-          initial={{ y: 20, opacity: 0 }}
-          whileInView={{ y: 0, opacity: 1 }}
-          viewport={{ once: true }}
-          className="text-3xl md:text-4xl mb-16 text-center"
-          style={{ fontWeight: 700 }}
-        >
-          {t('home.how.title')}
-        </motion.h2>
-
-        <div className="grid lg:grid-cols-3 gap-8 mb-20">
-          <InfoCard
-            icon={Sparkles}
-            title={t('home.how.title')}
-            items={howItWorksSteps}
-            gradient="from-emerald-500 to-green-600"
-          />
-
-          <InfoCard
-            icon={Layers}
-            title={t('home.create.title')}
-            items={createSteps}
-            gradient="from-lime-500 to-teal-600"
-          />
-
-          <motion.div
-            initial={{ y: 40, opacity: 0 }}
-            whileInView={{ y: 0, opacity: 1 }}
-            viewport={{ once: true }}
-            className="relative"
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-2xl blur-md" />
-            <div className="relative backdrop-blur-md bg-card border border-border rounded-2xl p-8">
-              <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mb-6">
-                <DollarSign className="w-7 h-7 text-white" />
-              </div>
-
-              <h3 className="text-xl mb-6" style={{ fontWeight: 600 }}>
-                {t('home.distribution.title')}
-              </h3>
-
-              <div className="space-y-5">
-                {distributionItems.map((item, i) => (
-                  <div key={i}>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm text-muted-foreground">{item.text}</span>
-                      <span className="text-xl text-primary" style={{ fontWeight: 700 }}>
-                        {item.percentage}
-                      </span>
-                    </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-primary to-accent"
-                        style={{ width: item.percentage }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      </section>
-
-      <section className="max-w-[1400px] mx-auto px-6 py-12">
-        <div id="explore" className="scroll-mt-20">
-          <div className="flex items-center justify-between gap-4 mb-8">
+      <section className="max-w-[1400px] mx-auto px-4 sm:px-6 py-12">
+        <div id="explore" className="scroll-mt-24">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
             <motion.h2
               initial={{ y: 20, opacity: 0 }}
               whileInView={{ y: 0, opacity: 1 }}
@@ -342,27 +272,27 @@ export function HomePage({ setCurrentPage, setSelectedLottery }: HomePageProps) 
 
             <button
               onClick={refetch}
-              className="px-4 py-2 rounded-xl border border-border hover:bg-muted transition-all text-sm"
+              className="w-full sm:w-auto px-4 py-3 rounded-xl border border-border hover:bg-muted transition-all text-sm"
             >
               {t('home.refresh')}
             </button>
           </div>
 
-          <div className="flex flex-col lg:flex-row gap-4 mb-8">
+          <div className="flex flex-col gap-4 mb-8">
             <input
               type="text"
               placeholder={t('filters.search')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 px-4 py-3 rounded-xl bg-input-background border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-black"
+              className="w-full px-4 py-3 rounded-xl bg-input-background border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 text-black"
             />
 
-            <div className="flex gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="relative">
                 <select
                   value={selectedChain}
                   onChange={(e) => setSelectedChain(e.target.value as SupportedChainKey | 'all')}
-                  className="appearance-none px-4 py-3 pr-10 rounded-xl bg-input-background border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer text-black"
+                  className="appearance-none w-full px-4 py-3 pr-10 rounded-xl bg-input-background border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer text-black"
                 >
                   <option value="all">{t('filters.all')}</option>
                   <option value="base">Base Sepolia</option>
@@ -376,7 +306,7 @@ export function HomePage({ setCurrentPage, setSelectedLottery }: HomePageProps) 
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="appearance-none px-4 py-3 pr-10 rounded-xl bg-input-background border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer text-black"
+                  className="appearance-none w-full px-4 py-3 pr-10 rounded-xl bg-input-background border border-border focus:outline-none focus:ring-2 focus:ring-primary/50 cursor-pointer text-black"
                 >
                   <option value="highestPool">{t('filters.highestPool')}</option>
                   <option value="highestMax">{t('filters.highestMax')}</option>
@@ -413,7 +343,7 @@ export function HomePage({ setCurrentPage, setSelectedLottery }: HomePageProps) 
           )}
 
           {!isLoading && stableOpenLotteries.length === 0 && (
-            <div className="py-16 text-center rounded-2xl border border-border bg-card">
+            <div className="py-16 text-center rounded-2xl border border-border bg-card px-4">
               <p className="text-xl mb-2">{t('home.no_open_title')}</p>
               <p className="text-muted-foreground mb-6">
                 {t('home.no_open_body')}
@@ -427,7 +357,7 @@ export function HomePage({ setCurrentPage, setSelectedLottery }: HomePageProps) 
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {filteredLotteries.map((lottery, i) => (
               <motion.div
                 key={`${lottery.chain}-${lottery.id.toString()}`}
@@ -440,6 +370,71 @@ export function HomePage({ setCurrentPage, setSelectedLottery }: HomePageProps) 
               </motion.div>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section className="max-w-[1400px] mx-auto px-4 sm:px-6 py-12">
+        <motion.h2
+          initial={{ y: 20, opacity: 0 }}
+          whileInView={{ y: 0, opacity: 1 }}
+          viewport={{ once: true }}
+          className="text-3xl md:text-4xl mb-12 text-center"
+          style={{ fontWeight: 700 }}
+        >
+          {t('home.how.title')}
+        </motion.h2>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-20">
+          <InfoCard
+            icon={Sparkles}
+            title={t('home.how.title')}
+            items={howItWorksSteps}
+            gradient="from-emerald-500 to-green-600"
+          />
+
+          <InfoCard
+            icon={Layers}
+            title={t('home.create.title')}
+            items={createSteps}
+            gradient="from-lime-500 to-teal-600"
+          />
+
+          <motion.div
+            initial={{ y: 40, opacity: 0 }}
+            whileInView={{ y: 0, opacity: 1 }}
+            viewport={{ once: true }}
+            className="relative"
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 to-emerald-500/10 rounded-2xl blur-md" />
+            <div className="relative backdrop-blur-md bg-card border border-border rounded-2xl p-6 sm:p-8">
+              <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mb-6">
+                <DollarSign className="w-7 h-7 text-white" />
+              </div>
+
+              <h3 className="text-xl mb-6" style={{ fontWeight: 600 }}>
+                {t('home.distribution.title')}
+              </h3>
+
+              <div className="space-y-5">
+                {distributionItems.map((item, i) => (
+                  <div key={i}>
+                    <div className="flex items-center justify-between mb-2 gap-4">
+                      <span className="text-sm text-muted-foreground">{item.text}</span>
+                      <span className="text-xl text-primary shrink-0" style={{ fontWeight: 700 }}>
+                        {item.percentage}
+                      </span>
+                    </div>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-primary to-accent"
+                        style={{ width: item.percentage }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
         </div>
       </section>
     </div>
@@ -465,7 +460,7 @@ function InfoCard({
       className="relative"
     >
       <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-green-500/10 rounded-2xl blur-md" />
-      <div className="relative backdrop-blur-md bg-card border border-border rounded-2xl p-8">
+      <div className="relative backdrop-blur-md bg-card border border-border rounded-2xl p-6 sm:p-8">
         <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center mb-6`}>
           <Icon className="w-7 h-7 text-white" />
         </div>
@@ -501,7 +496,7 @@ function RealLotteryCard({ lottery, onClick }: { lottery: Lottery; onClick: () =
       : 0;
 
   const isAlmostFull = progress >= 80;
-  const isHighPool = currentPool >= 100_000_000n; // 100 USDC con 6 decimales
+  const isHighPool = currentPool >= 100_000_000n;
   const isNew = lottery.id >= 2n;
 
   return (
@@ -511,11 +506,11 @@ function RealLotteryCard({ lottery, onClick }: { lottery: Lottery; onClick: () =
     >
       <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-accent/10 rounded-2xl blur-md opacity-70 group-hover:opacity-100 transition" />
 
-      <div className="relative backdrop-blur-md bg-card border border-border rounded-2xl p-6 h-full">
+      <div className="relative backdrop-blur-md bg-card border border-border rounded-2xl p-5 sm:p-6 h-full">
         <div className="flex items-start justify-between gap-4 mb-5">
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1">
-              <h3 className="text-xl font-bold">{lottery.name}</h3>
+              <h3 className="text-lg sm:text-xl font-bold break-words">{lottery.name}</h3>
 
               {isNew && (
                 <span className="px-2 py-1 rounded-full text-[10px] bg-primary/10 text-primary">
@@ -540,35 +535,34 @@ function RealLotteryCard({ lottery, onClick }: { lottery: Lottery; onClick: () =
           </div>
 
           <span
-            className={`px-3 py-1 rounded-full text-xs text-white bg-gradient-to-r ${chainColors[lottery.chain]}`}
+            className={`px-3 py-1 rounded-full text-xs text-white bg-gradient-to-r ${chainColors[lottery.chain]} shrink-0`}
           >
             {chain.shortName}
           </span>
         </div>
 
-        <div className="space-y-3 mb-5">
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">{t('home.creator_label')}</span>
-            <span className="font-mono">{formatAddress(lottery.creator)}</span>
+        <div className="mb-4 text-sm text-muted-foreground break-all">
+          {t('home.creator_label')} {formatAddress(lottery.creator)}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+          <div className="rounded-xl bg-muted/40 p-4">
+            <p className="text-xs text-muted-foreground mb-1">{t('home.ticket_label')}</p>
+            <p className="font-bold">{formatUSDC(lottery.ticketPrice)} USDC</p>
           </div>
 
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">{t('home.ticket_label')}</span>
-            <span>{formatUSDC(lottery.ticketPrice)} USDC</span>
-          </div>
-
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">{t('home.sold_label')}</span>
-            <span>
+          <div className="rounded-xl bg-muted/40 p-4">
+            <p className="text-xs text-muted-foreground mb-1">{t('home.sold_label')}</p>
+            <p className="font-bold">
               {lottery.ticketsSold.toString()} / {lottery.maxTickets.toString()}
-            </span>
+            </p>
           </div>
         </div>
 
         <div className="mb-5">
-          <div className="flex justify-between text-sm mb-2">
+          <div className="flex justify-between text-sm mb-2 gap-4">
             <span className="text-muted-foreground">{t('home.progress_label')}</span>
-            <span>{progress.toFixed(1)}%</span>
+            <span className="shrink-0">{progress.toFixed(1)}%</span>
           </div>
 
           <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -579,13 +573,13 @@ function RealLotteryCard({ lottery, onClick }: { lottery: Lottery; onClick: () =
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="p-3 rounded-xl bg-muted/50">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="rounded-xl border border-border p-4">
             <p className="text-xs text-muted-foreground mb-1">{t('home.current_pool_label')}</p>
             <p className="font-bold text-primary">{formatUSDC(currentPool)} USDC</p>
           </div>
 
-          <div className="p-3 rounded-xl bg-muted/50">
+          <div className="rounded-xl border border-border p-4">
             <p className="text-xs text-muted-foreground mb-1">{t('home.max_pool_label')}</p>
             <p className="font-bold">{formatUSDC(maxPool)} USDC</p>
           </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useConnect, useDisconnect } from 'wagmi';
 import { useWallet } from '../../hooks/uswWallet';
 import { useSwitchToChain } from '../../hooks/useSwitchToChain';
@@ -7,11 +7,31 @@ import { SUPPORTED_CHAINS, type SupportedChainKey } from '../../config/chains';
 
 export function WalletButton() {
   const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const { address, isConnected, currentChain } = useWallet();
   const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchToChain, isSwitching } = useSwitchToChain();
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    }
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
 
   const handleSwitchChain = (chainKey: SupportedChainKey) => {
     switchToChain(chainKey);
@@ -20,30 +40,54 @@ export function WalletButton() {
 
   if (!isConnected || !address) {
     return (
-      <button
-        onClick={() => connect({ connector: connectors[0] })}
-        disabled={isPending || connectors.length === 0}
-        className="rounded-xl px-4 py-2 font-medium bg-primary text-primary-foreground hover:opacity-90 transition disabled:opacity-50"
-      >
-        {isPending ? 'Conectando...' : 'Conectar wallet'}
-      </button>
+      <div ref={containerRef} className="relative w-full sm:w-auto">
+        <button
+          onClick={() => setIsOpen((prev) => !prev)}
+          disabled={isPending}
+          className="w-full sm:w-auto rounded-xl px-4 py-2.5 font-medium bg-primary text-primary-foreground hover:opacity-90 transition disabled:opacity-50"
+        >
+          {isPending ? 'Conectando...' : 'Conectar wallet'}
+        </button>
+
+        {isOpen && (
+          <div className="absolute right-0 mt-3 w-[calc(100vw-2rem)] max-w-sm sm:w-80 rounded-2xl border border-border bg-background/95 backdrop-blur-xl shadow-2xl p-4 z-50 space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Elige cómo quieres conectar tu wallet
+            </p>
+
+            {connectors.map((connector) => (
+              <button
+                key={connector.uid}
+                onClick={() => {
+                  connect({ connector });
+                  setIsOpen(false);
+                }}
+                disabled={isPending}
+                className="w-full rounded-xl px-4 py-3 text-left border border-border hover:bg-muted transition disabled:opacity-50"
+              >
+                {connector.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     );
   }
 
   return (
-    <div className="relative">
+    <div ref={containerRef} className="relative w-full sm:w-auto">
       <button
         onClick={() => setIsOpen((prev) => !prev)}
-        className="rounded-xl px-4 py-2 font-medium border border-border bg-card hover:opacity-90 transition flex items-center gap-2"
+        className="w-full sm:w-auto rounded-xl px-4 py-2.5 font-medium border border-border bg-background hover:opacity-90 transition flex items-center justify-between sm:justify-center gap-2"
       >
         <span className="hidden md:inline text-sm text-muted-foreground">
           {currentChain?.name ?? 'Red no soportada'}
         </span>
-        <span>{formatAddress(address)}</span>
+        <span className="truncate">{formatAddress(address)}</span>
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-3 w-72 rounded-2xl border border-border bg-card shadow-xl p-4 z-50 space-y-4">
+        <div className="absolute right-0 mt-3 w-[calc(100vw-2rem)] max-w-sm sm:w-80 rounded-2xl border border-border bg-background/95 backdrop-blur-xl shadow-2xl p-4 z-50 space-y-4">
           <div>
             <p className="text-xs text-muted-foreground">Wallet conectada</p>
             <p className="font-medium break-all">{address}</p>
@@ -51,7 +95,7 @@ export function WalletButton() {
 
           <div>
             <p className="text-xs text-muted-foreground mb-2">Red actual</p>
-            <div className="rounded-xl border border-border px-3 py-2">
+            <div className="rounded-xl border border-border px-3 py-2 break-words">
               {currentChain?.name ?? 'Red no soportada'}
             </div>
           </div>
@@ -64,7 +108,7 @@ export function WalletButton() {
                   key={chain.key}
                   onClick={() => handleSwitchChain(chain.key)}
                   disabled={isSwitching || currentChain?.key === chain.key}
-                  className="w-full rounded-xl px-3 py-2 text-left border border-border hover:bg-muted transition disabled:opacity-50"
+                  className="w-full rounded-xl px-3 py-3 text-left border border-border hover:bg-muted transition disabled:opacity-50"
                 >
                   {chain.name}
                 </button>
@@ -77,7 +121,7 @@ export function WalletButton() {
               disconnect();
               setIsOpen(false);
             }}
-            className="w-full rounded-xl px-4 py-2 border border-red-500/30 text-red-500 hover:bg-red-500/10 transition"
+            className="w-full rounded-xl px-4 py-3 border border-red-500/30 text-red-500 hover:bg-red-500/10 transition"
           >
             Desconectar
           </button>

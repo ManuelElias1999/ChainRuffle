@@ -27,6 +27,11 @@ const translations: Translations = {
   'home.badge.almostFull': { es: 'Por llenarse', en: 'Almost full' },
   'home.badge.highPool': { es: 'Pozo alto', en: 'High pool' },
   'home.badge.new': { es: 'Nueva', en: 'New' },
+  'home.badges.transparent': { es: 'Transparente', en: 'Transparent' },
+  'home.badges.multichain': { es: 'Multichain', en: 'Multichain' },
+  'home.badges.usdc': { es: 'USDC', en: 'USDC' },
+  'home.badges.autoDraw': { es: 'Sorteo automático', en: 'Automatic draw' },
+  'home.badges.onchainPayments': { es: 'Pagos onchain', en: 'Onchain payments' },
   'home.refresh': { es: 'Actualizar', en: 'Refresh' },
   'home.loading_lotteries': { es: 'Cargando loterías multichain...', en: 'Loading multichain lotteries...' },
   'home.partial_error_title': { es: 'Algunas redes no respondieron correctamente.', en: 'Some networks did not respond correctly.' },
@@ -92,6 +97,7 @@ const translations: Translations = {
 
   // Detail existing
   'detail.purchase': { es: 'Comprar tickets', en: 'Buy tickets' },
+  'detail.invalid_quantity': { es: 'Cantidad inválida', en: 'Invalid quantity' },
   'detail.quantity': { es: 'Cantidad', en: 'Quantity' },
   'detail.total': { es: 'Total estimado', en: 'Estimated total' },
   'detail.step1': { es: 'Paso 1: Aprobar USDC', en: 'Step 1: Approve USDC' },
@@ -196,6 +202,8 @@ const translations: Translations = {
   'dashboard.overview_multichain': { es: 'Vista general de tus loterías creadas y en las que participas en Base, Avalanche y Arbitrum.', en: 'Overview of your created lotteries and the ones you participate in across Base, Avalanche and Arbitrum.' },
   'dashboard.refresh': { es: 'Actualizar', en: 'Refresh' },
   'dashboard.created_count': { es: 'Loterías creadas', en: 'Created lotteries' },
+  'dashboard.won_lotteries': { es: 'Loterías ganadas', en: 'Won lotteries' },
+  'dashboard.total_won': { es: 'Total ganado', en: 'Total won' },
   'dashboard.participating_count': { es: 'Loterías donde participas', en: 'Participating lotteries' },
   'dashboard.total_tickets_bought': { es: 'Tickets comprados', en: 'Tickets bought' },
   'dashboard.total_pool_generated': { es: 'Pozo total generado', en: 'Total generated pool' },
