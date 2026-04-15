@@ -45,6 +45,74 @@ const translations: Translations = {
   'home.progress_label': { es: 'Progreso', en: 'Progress' },
   'home.current_pool_label': { es: 'Pozo actual', en: 'Current pool' },
   'home.max_pool_label': { es: 'Pozo máximo', en: 'Max pool' },
+  'home.featured': {
+    es: 'Lotería destacada',
+    en: 'Featured lottery',
+  },
+  'home.buy_tickets': {
+    es: 'Comprar tickets',
+    en: 'Buy tickets',
+  },
+  'home.view_more': {
+    es: 'Ver más',
+    en: 'View more',
+  },
+  'home.hero.badge': {
+  es: 'Loterías onchain multichain',
+  en: 'Multichain onchain raffles',
+},
+'home.participants_label': {
+  es: 'Participantes',
+  en: 'Participants',
+},
+'home.stats.badge_live': {
+  es: 'Live',
+  en: 'Live',
+},
+'home.stats.badge_top': {
+  es: 'Top',
+  en: 'Top',
+},
+'home.stats.badge_users': {
+  es: 'Users',
+  en: 'Users',
+},
+'home.discover_badge': {
+  es: 'Descubre',
+  en: 'Discover',
+},
+'home.view_raffle_details': {
+  es: 'Ver detalles del sorteo',
+  en: 'View raffle details',
+},
+'home.explore_title': {
+  es: 'Explora loterías activas',
+  en: 'Explore active raffles',
+},
+'home.explore_subtitle': {
+  es: 'Encuentra sorteos con mejores pozos, tickets más baratos o los que están a punto de llenarse.',
+  en: 'Find raffles with bigger pools, cheaper tickets, or the ones closest to selling out.',
+},
+'home.how.subtitle': {
+  es: 'Cómo funciona para el usuario',
+  en: 'How it works for the user',
+},
+'home.create.subtitle': {
+  es: 'Cómo crear tu propio sorteo',
+  en: 'How to create your own raffle',
+},
+'home.distribution.badge': {
+  es: 'Distribución',
+  en: 'Distribution',
+},
+'home.distribution.note': {
+  es: 'Transparencia, recompensas claras y una experiencia visual más sólida para que la plataforma se sienta como un producto real.',
+  en: 'Transparency, clear rewards, and a stronger visual experience so the platform feels like a real product.',
+},
+'home.view_less': {
+  es: 'Ver menos',
+  en: 'View less',
+},
 
   // How It Works
   'home.how.title': { es: 'Cómo funciona', en: 'How it works' },
@@ -253,6 +321,8 @@ const translations: Translations = {
   'distribution.winner': { es: 'Ganador: 80%', en: 'Winner: 80%' },
   'distribution.creator': { es: 'Creador: 10%', en: 'Creator: 10%' },
   'distribution.fees': { es: 'Comisiones: 10%', en: 'Fees: 10%' },
+
+  
 };
 
 interface TranslationContextType {
